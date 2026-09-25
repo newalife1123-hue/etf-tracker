@@ -32,6 +32,10 @@
     .total-summary { background: white; padding: 20px; border-radius: 12px; border: 1px solid #ddd; margin-top: 20px; }
     .total-label { color: #666; font-size: 13px; }
     .total-value { font-size: 28px; font-weight: bold; color: #0066cc; }
+    .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 10px; }
+    .search-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .search-item:hover { background: #f0f0f0; }
+    .search-item:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -41,8 +45,9 @@
     
     <div>
       <div class="section-title">新增 ETF</div>
-      <input type="text" id="code" placeholder="ETF 代碼 (如 0056)">
-      <input type="text" id="name" placeholder="名稱 (可選)">
+      <input type="text" id="code" placeholder="輸入代碼 (如 919, 878, 0056)" oninput="searchETF()">
+      <div id="searchResults" class="search-results" style="display: none;"></div>
+      <input type="text" id="name" placeholder="名稱 (自動填充)">
       <button onclick="addETF()" style="width: 100%;">新增</button>
     </div>
     
@@ -71,6 +76,39 @@
       localStorage.setItem('trackedETFs', JSON.stringify(etfs));
     }
     
+    function searchETF() {
+      const input = document.getElementById('code').value.trim();
+      const results = document.getElementById('searchResults');
+      
+      if (!input) {
+        results.style.display = 'none';
+        return;
+      }
+      
+      const matches = Object.entries(etfDatabase).filter(([code, info]) => 
+        code.includes(input.toUpperCase())
+      );
+      
+      if (matches.length === 0) {
+        results.style.display = 'none';
+        return;
+      }
+      
+      results.innerHTML = matches.map(([code, info]) => `
+        <div class="search-item" onclick="selectETF('${code}', '${info.name}')">
+          ${code} - ${info.name}
+        </div>
+      `).join('');
+      
+      results.style.display = 'block';
+    }
+    
+    function selectETF(code, name) {
+      document.getElementById('code').value = code;
+      document.getElementById('name').value = name;
+      document.getElementById('searchResults').style.display = 'none';
+    }
+    
     function addETF() {
       const code = document.getElementById('code').value.toUpperCase().trim();
       let name = document.getElementById('name').value.trim();
@@ -84,6 +122,7 @@
       render();
       document.getElementById('code').value = '';
       document.getElementById('name').value = '';
+      document.getElementById('searchResults').style.display = 'none';
     }
     
     function deleteETF(idx) {
