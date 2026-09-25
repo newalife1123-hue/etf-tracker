@@ -2,12 +2,18 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>ETF 股息追蹤器</title>
+  <meta name="theme-color" content="#0066cc">
+  <meta name="description" content="追蹤你的ETF股息">
+  <link rel="manifest" href="data:application/json,{%22name%22:%22ETF%20股息追蹤器%22,%22short_name%22:%22股息追蹤%22,%22description%22:%22追蹤你的ETF股息%22,%22start_url%22:%22./%22,%22display%22:%22standalone%22,%22background_color%22:%22%23ffffff%22,%22theme_color%22:%22%230066cc%22,%22orientation%22:%22portrait%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230066cc' width='192' height='192'/><text x='50%' y='50%' font-size='120' fill='white' text-anchor='middle' dominant-baseline='central'>📊</text></svg>%22,%22sizes%22:%22192x192%22,%22type%22:%22image/svg+xml%22}]}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230066cc' width='192' height='192'/><text x='50%' y='50%' font-size='120' fill='white' text-anchor='middle' dominant-baseline='central'>📊</text></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%230066cc' width='192' height='192'/><text x='50%' y='50%' font-size='120' fill='white' text-anchor='middle' dominant-baseline='central'>📊</text></svg>">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: system-ui; background: #f5f5f5; color: #333; padding: 20px; }
-    .container { max-width: 700px; margin: 0 auto; }
+    html, body { height: 100%; width: 100%; }
+    body { font-family: system-ui; background: #f5f5f5; color: #333; padding: 20px 0; padding-bottom: 100px; }
+    .container { max-width: 700px; margin: 0 auto; padding: 0 20px; }
     h1 { margin-bottom: 5px; font-size: 24px; }
     .subtitle { color: #666; margin-bottom: 20px; font-size: 14px; }
     .section-title { font-size: 14px; font-weight: bold; margin: 20px 0 10px 0; padding-bottom: 8px; border-bottom: 1px solid #ddd; }
@@ -29,7 +35,7 @@
     .trade-history { margin-top: 15px; font-size: 12px; }
     .trade-row { display: flex; justify-content: space-between; padding: 8px; border-bottom: 1px solid #eee; align-items: center; }
     .trade-row:last-child { border-bottom: none; }
-    .total-summary { background: white; padding: 20px; border-radius: 12px; border: 1px solid #ddd; margin-top: 20px; }
+    .total-summary { background: white; padding: 20px; border-radius: 12px; border: 1px solid #ddd; margin-top: 20px; position: fixed; bottom: 0; left: 0; right: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); }
     .total-label { color: #666; font-size: 13px; }
     .total-value { font-size: 28px; font-weight: bold; color: #0066cc; }
     .search-results { background: white; border: 1px solid #ddd; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-bottom: 10px; }
@@ -45,84 +51,41 @@
     
     <div>
       <div class="section-title">新增 ETF</div>
-      <input type="text" id="code" placeholder="輸入代碼 (如 919, 878, 0056)" oninput="searchETF()">
-      <div id="searchResults" class="search-results" style="display: none;"></div>
-      <input type="text" id="name" placeholder="名稱 (自動填充)">
+      <input type="text" id="code" placeholder="ETF 代碼 (如 0056)">
+      <input type="text" id="name" placeholder="ETF 名稱">
+      <input type="number" id="dividend" placeholder="配息金額 (元/股)" step="0.01" min="0">
       <button onclick="addETF()" style="width: 100%;">新增</button>
     </div>
     
     <div id="list"></div>
-    
-    <div class="total-summary">
-      <div class="total-label">此季可領取總股息</div>
-      <div class="total-value" id="totalDiv">0 元</div>
-    </div>
+  </div>
+
+  <div class="total-summary">
+    <div class="total-label">此季可領取總股息</div>
+    <div class="total-value" id="totalDiv">0 元</div>
   </div>
 
   <script>
-    const etfDatabase = {
-      '00919': { name: '00919 高息多重資產基金', dividend: 1.10 },
-      '0056': { name: '富邦台灣優質公司', dividend: 1.35 },
-      '00878': { name: '國泰低波高息ETF', dividend: 1.01 },
-      '0050': { name: '元大台灣50', dividend: 0 },
-      '00981A': { name: '凱基優選高息30', dividend: 0 },
-      '00929': { name: '永豐優息存股', dividend: 1.2 },
-      'VOO': { name: 'Vanguard S&P 500', dividend: 0 }
-    };
-    
     let etfs = JSON.parse(localStorage.getItem('trackedETFs') || '[]');
     
     function saveETFs() {
       localStorage.setItem('trackedETFs', JSON.stringify(etfs));
     }
     
-    function searchETF() {
-      const input = document.getElementById('code').value.trim();
-      const results = document.getElementById('searchResults');
-      
-      if (!input) {
-        results.style.display = 'none';
-        return;
-      }
-      
-      const matches = Object.entries(etfDatabase).filter(([code, info]) => 
-        code.includes(input.toUpperCase())
-      );
-      
-      if (matches.length === 0) {
-        results.style.display = 'none';
-        return;
-      }
-      
-      results.innerHTML = matches.map(([code, info]) => `
-        <div class="search-item" onclick="selectETF('${code}', '${info.name}')">
-          ${code} - ${info.name}
-        </div>
-      `).join('');
-      
-      results.style.display = 'block';
-    }
-    
-    function selectETF(code, name) {
-      document.getElementById('code').value = code;
-      document.getElementById('name').value = name;
-      document.getElementById('searchResults').style.display = 'none';
-    }
-    
     function addETF() {
       const code = document.getElementById('code').value.toUpperCase().trim();
-      let name = document.getElementById('name').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const dividend = parseFloat(document.getElementById('dividend').value) || 0;
       
-      if (!code) { alert('請輸入代碼'); return; }
-      if (!name) name = etfDatabase[code]?.name || '未知';
-      if (etfs.some(e => e.code === code)) { alert('已存在'); return; }
+      if (!code || !name) { alert('請輸入代碼和名稱'); return; }
+      if (etfs.some(e => e.code === code)) { alert('此代碼已存在'); return; }
       
-      etfs.push({ code, name, trades: [] });
+      etfs.push({ code, name, dividend, trades: [] });
       saveETFs();
       render();
       document.getElementById('code').value = '';
       document.getElementById('name').value = '';
-      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('dividend').value = '';
     }
     
     function deleteETF(idx) {
@@ -165,9 +128,8 @@
     function render() {
       const list = document.getElementById('list');
       list.innerHTML = etfs.map((etf, idx) => {
-        const dbInfo = etfDatabase[etf.code] || { name: etf.name, dividend: 0 };
         const shares = getShares(idx);
-        const dividend = Math.round(shares * dbInfo.dividend);
+        const dividend = Math.round(shares * etf.dividend);
         const trades = etf.trades || [];
         
         return `
@@ -182,7 +144,7 @@
             
             <div class="info-box">
               <div class="info-label">下次股息</div>
-              <div class="info-value">${dbInfo.dividend > 0 ? dbInfo.dividend + ' 元/股' : '查無資料'}</div>
+              <div class="info-value">${etf.dividend} 元/股</div>
             </div>
             
             <div class="info-box">
@@ -233,15 +195,58 @@
     
     function calculateTotal() {
       const total = etfs.reduce((sum, etf, idx) => {
-        const dbInfo = etfDatabase[etf.code] || { dividend: 0 };
-        const shares = getShares(etfs.indexOf(etf));
-        return sum + Math.round(shares * dbInfo.dividend);
+        const shares = getShares(idx);
+        return sum + Math.round(shares * etf.dividend);
       }, 0);
       
       document.getElementById('totalDiv').textContent = total.toLocaleString() + ' 元';
     }
     
     render();
+
+    // Service Worker 註冊（PWA）
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+const CACHE_NAME = 'etf-tracker-v1';
+const urlsToCache = ['./', './index.html'];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache).catch(() => {}))
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => 
+      Promise.all(cacheNames.map(cacheName => 
+        cacheName !== CACHE_NAME ? caches.delete(cacheName) : null
+      ))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    caches.match(event.request).then(response => 
+      response || fetch(event.request).then(response => {
+        if (!response || response.status !== 200) return response;
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+        return response;
+      }).catch(() => caches.match('./'))
+    )
+  );
+});
+      `;
+      
+      const blob = new Blob([swCode], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(err => console.log('SW failed:', err));
+    }
   </script>
 </body>
-</html>
+</html>html>
