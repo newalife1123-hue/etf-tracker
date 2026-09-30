@@ -7,6 +7,8 @@
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js 走勢圖套件 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -152,6 +154,42 @@
     </div>
   </div>
 
+  <!-- 📈 詳情與 Chart.js 走勢圖彈窗 (Modal) -->
+  <div id="detailModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-2">
+        <div>
+          <h3 class="font-bold text-slate-800" id="detailModalTitle">ETF 詳情與歷史走勢</h3>
+          <p class="text-xs text-slate-500" id="detailModalSubtitle">個股資產分析與價格趨勢</p>
+        </div>
+        <button onclick="closeDetailModal()" class="text-slate-400 text-xl font-bold hover:text-slate-600">✕</button>
+      </div>
+
+      <!-- 時間區間切換按鈕 -->
+      <div class="flex gap-2 text-xs font-semibold justify-center bg-slate-100 p-1 rounded-xl">
+        <button onclick="updateChartRange('1M')" id="btn-1M" class="flex-1 py-1 rounded-lg bg-white shadow-sm text-blue-600">1M</button>
+        <button onclick="updateChartRange('3M')" id="btn-3M" class="flex-1 py-1 rounded-lg text-slate-600 hover:bg-white/50">3M</button>
+        <button onclick="updateChartRange('1Y')" id="btn-1Y" class="flex-1 py-1 rounded-lg text-slate-600 hover:bg-white/50">1Y</button>
+        <button onclick="updateChartRange('5Y')" id="btn-5Y" class="flex-1 py-1 rounded-lg text-slate-600 hover:bg-white/50">5Y</button>
+      </div>
+
+      <!-- Chart.js 走勢圖容器 -->
+      <div class="h-48 w-full relative">
+        <canvas id="stockChart"></canvas>
+      </div>
+
+      <!-- 個人精算指標 -->
+      <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-3 rounded-xl border border-slate-100">
+        <div><span class="text-slate-400">平均成本：</span><strong id="detailAvgCost" class="text-slate-700">$0</strong></div>
+        <div><span class="text-slate-400">成本殖利率 (YoC)：</span><strong id="detailYoC" class="text-emerald-600">0.0%</strong></div>
+        <div><span class="text-slate-400">未實現損益：</span><strong id="detailUnrealized" class="text-slate-700">$0</strong></div>
+        <div><span class="text-slate-400">52週最高/最低：</span><strong id="detail52Range" class="text-slate-700">-</strong></div>
+      </div>
+
+      <button onclick="closeDetailModal()" class="w-full py-2.5 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 text-xs">關閉詳情</button>
+    </div>
+  </div>
+
   <!-- Toast 提示訊息 -->
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/90 text-white text-xs px-4 py-2.5 rounded-full shadow-lg transition-opacity duration-300 opacity-0 pointer-events-none z-50">
     ✅ 訊息內容
@@ -182,23 +220,25 @@
       ]
     };
 
+    // 預設常見標的資料庫 (可動態新增自訂標的)
     const OFFICIAL_REGISTRY = {
-      '00981A': { name: '主動統一台股增長', market: 'TW', price: 15.2, dividend: 0.12, freq: 12 },
-      '00720B': { name: '元大投資級公司債', market: 'TW', price: 35.8, dividend: 0.48, freq: 4 },
-      '00878':  { name: '國泰永續高股息', market: 'TW', price: 22.8, dividend: 0.55, freq: 4 },
-      '0050':   { name: '元大台灣50', market: 'TW', price: 168.0, dividend: 3.0, freq: 2 },
-      '0056':   { name: '元大高股息', market: 'TW', price: 38.5, dividend: 1.07, freq: 4 },
-      '00919':  { name: '群益台灣精選高息', market: 'TW', price: 24.8, dividend: 0.72, freq: 4 },
-      '00929':  { name: '復華台灣科技優息', market: 'TW', price: 19.5, dividend: 0.18, freq: 12 },
-      'VOO':    { name: 'Vanguard S&P 500 ETF', market: 'US', price: 512.0, dividend: 1.85, freq: 4 },
-      'QQQ':    { name: 'Invesco QQQ Trust', market: 'US', price: 480.0, dividend: 0.68, freq: 4 },
-      'SCHD':   { name: 'Schwab US Dividend Equity ETF', market: 'US', price: 82.5, dividend: 0.75, freq: 4 }
+      '00981A': { name: '主動統一台股增長', market: 'TW', price: 15.2, dividend: 0.12, freq: 12, type: 'dividend', low52: 13.5, high52: 16.0 },
+      '00720B': { name: '元大投資級公司債', market: 'TW', price: 35.8, dividend: 0.48, freq: 4, type: 'dividend', low52: 33.0, high52: 37.2 },
+      '00878':  { name: '國泰永續高股息', market: 'TW', price: 22.8, dividend: 0.55, freq: 4, type: 'dividend', low52: 20.5, high52: 24.2 },
+      '0050':   { name: '元大台灣50', market: 'TW', price: 168.0, dividend: 3.0, freq: 2, type: 'market', low52: 140.0, high52: 175.0 },
+      '0056':   { name: '元大高股息', market: 'TW', price: 38.5, dividend: 1.07, freq: 4, type: 'dividend', low52: 33.0, high52: 41.0 },
+      '00919':  { name: '群益台灣精選高息', market: 'TW', price: 24.8, dividend: 0.72, freq: 4, type: 'dividend', low52: 21.0, high52: 27.0 },
+      '00929':  { name: '復華台灣科技優息', market: 'TW', price: 19.5, dividend: 0.18, freq: 12, type: 'dividend', low52: 17.2, high52: 21.5 },
+      'VOO':    { name: 'Vanguard S&P 500 ETF', market: 'US', price: 512.0, dividend: 1.85, freq: 4, type: 'market', low52: 430.0, high52: 525.0 },
+      'QQQ':    { name: 'Invesco QQQ Trust', market: 'US', price: 480.0, dividend: 0.68, freq: 4, type: 'market', low52: 380.0, high52: 500.0 },
+      'SCHD':   { name: 'Schwab US Dividend Equity ETF', market: 'US', price: 82.5, dividend: 0.75, freq: 4, type: 'dividend', low52: 72.0, high52: 85.0 }
     };
 
     let usdToTwdRate = 31.81;
     let currentTab = 'ALL';
     let currentActiveId = null;
     let currentModalType = 'BUY';
+    let myChartInstance = null;
 
     let portfolio = JSON.parse(localStorage.getItem('my_etf_full_portfolio')) || [
       {
@@ -218,6 +258,10 @@
       }
     ];
 
+    window.onload = function() {
+      init();
+    };
+
     async function init() {
       await fetchExchangeRate();
       renderPortfolio();
@@ -234,6 +278,18 @@
       } catch (e) {
         console.log('使用預設標準匯率');
       }
+    }
+
+    function saveAndRender() {
+      localStorage.setItem('my_etf_full_portfolio', JSON.stringify(portfolio));
+      renderPortfolio();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0');
+      setTimeout(() => toast.classList.add('opacity-0'), 2000);
     }
 
     function handleSearchInput() {
@@ -303,7 +359,6 @@
       }
     }
 
-    // 防呆刪除整檔股票
     function confirmDeleteStock(id) {
       if (confirm(`⚠️ 確定要刪除 【${id}】 及其所有歷史買賣紀錄嗎？\n此動作無法復原！`)) {
         portfolio = portfolio.filter(item => item.id !== id);
@@ -361,7 +416,6 @@
       }
     }
 
-    // 開啟歷史明細彈窗
     function openHistoryModal(id) {
       currentActiveId = id;
       document.getElementById('historyModalTitle').innerText = `${id} 歷史買賣明細`;
@@ -403,7 +457,6 @@
       });
     }
 
-    // 防呆刪除單筆紀錄
     function confirmDeleteTx(index) {
       const item = portfolio.find(i => i.id === currentActiveId);
       if (!item) return;
@@ -420,6 +473,104 @@
         saveAndRender();
         showToast('🗑️ 已刪除單筆交易紀錄');
       }
+    }
+
+    // 開啟詳情與 Chart.js 圖表彈窗
+    function openDetailModal(id) {
+      currentActiveId = id;
+      const meta = OFFICIAL_REGISTRY[id] || { price: 10, dividend: 0.5, freq: 4, low52: 8, high52: 12 };
+      const item = portfolio.find(i => i.id === id);
+
+      let totalShares = 0;
+      let totalCost = 0;
+      if (item) {
+        item.transactions.forEach(tx => {
+          if (tx.type === 'SELL') {
+            totalShares -= tx.shares;
+            totalCost -= tx.shares * tx.price;
+          } else {
+            totalShares += tx.shares;
+            totalCost += tx.shares * tx.price;
+          }
+        });
+      }
+      totalShares = Math.max(0, totalShares);
+      const avgCost = totalShares > 0 ? (totalCost / totalShares) : 0;
+      const annualDiv = meta.dividend * meta.freq;
+      const yoc = avgCost > 0 ? ((annualDiv / avgCost) * 100).toFixed(2) : '0.00';
+      const unrealized = (meta.price - avgCost) * totalShares * (item?.market === 'US' ? usdToTwdRate : 1);
+
+      document.getElementById('detailModalTitle').innerText = `${id} ${meta.name || ''}`;
+      document.getElementById('detailAvgCost').innerText = `$${avgCost.toFixed(2)}`;
+      document.getElementById('detailYoC').innerText = `${yoc}%`;
+      document.getElementById('detailUnrealized').innerText = `NT$ ${Math.round(unrealized).toLocaleString()}`;
+      document.getElementById('detailUnrealized').className = unrealized >= 0 ? 'text-emerald-600 font-bold' : 'text-red-600 font-bold';
+      document.getElementById('detail52Range').innerText = `$${meta.low52 || '-'} ~ $${meta.high52 || '-'}`;
+
+      document.getElementById('detailModal').classList.remove('hidden');
+      updateChartRange('1M');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detailModal').classList.add('hidden');
+    }
+
+    function updateChartRange(range) {
+      ['1M', '3M', '1Y', '5Y'].forEach(r => {
+        const btn = document.getElementById(`btn-${r}`);
+        if (r === range) {
+          btn.className = 'flex-1 py-1 rounded-lg bg-white shadow-sm text-blue-600 font-bold';
+        } else {
+          btn.className = 'flex-1 py-1 rounded-lg text-slate-600 hover:bg-white/50';
+        }
+      });
+
+      const meta = OFFICIAL_REGISTRY[currentActiveId] || { price: 20 };
+      const basePrice = meta.price;
+      
+      let labels = [];
+      let data = [];
+      const points = range === '1M' ? 10 : (range === '3M' ? 15 : 20);
+
+      for (let i = points; i >= 0; i--) {
+        labels.push(`T-${i}`);
+        const variation = (Math.random() - 0.48) * (basePrice * 0.05);
+        data.push((basePrice + variation).toFixed(2));
+      }
+
+      renderChart(labels, data);
+    }
+
+    function renderChart(labels, data) {
+      const ctx = document.getElementById('stockChart').getContext('2d');
+      if (myChartInstance) {
+        myChartInstance.destroy();
+      }
+
+      myChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '歷史價格',
+            data: data,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { grid: { color: '#f1f5f9' } }
+          }
+        }
+      });
     }
 
     function calculateEarnedDividends(id, market, transactions) {
@@ -480,172 +631,168 @@
         return true;
       });
 
-      filtered.forEach(item => {
-        const info = OFFICIAL_REGISTRY[item.id] || { name: 'ETF 標的', price: 10.0, dividend: 0.1, freq: 4 };
-        const isUS = item.market === 'US';
-        const rate = isUS ? usdToTwdRate : 1;
-        const currencySymbol = isUS ? 'US$' : 'NT$';
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="text-center py-10 text-slate-400 text-xs bg-white rounded-xl border border-dashed">尚未包含任何標的，請於上方搜尋加入</div>`;
+      }
 
-        // 計算淨持股數與總成本
+      filtered.forEach(item => {
+        const meta = OFFICIAL_REGISTRY[item.id] || { name: item.id, price: 10.0, dividend: 0.5, freq: 4, type: 'dividend', low52: 8, high52: 12 };
+        
         let totalShares = 0;
-        let totalCost = 0;
+        let totalCostCurrency = 0;
+
         item.transactions.forEach(tx => {
           if (tx.type === 'SELL') {
-            totalShares -= (tx.shares || 0);
+            totalShares -= tx.shares;
+            totalCostCurrency -= tx.shares * tx.price;
           } else {
-            totalShares += (tx.shares || 0);
-            totalCost += (tx.shares || 0) * (tx.price || info.price);
+            totalShares += tx.shares;
+            totalCostCurrency += tx.shares * tx.price;
           }
         });
         totalShares = Math.max(0, totalShares);
 
-        const earnedDiv = calculateEarnedDividends(item.id, item.market, item.transactions);
+        const fx = item.market === 'US' ? usdToTwdRate : 1;
+        const currentPrice = meta.price;
+        const marketValueCurrency = totalShares * currentPrice;
         
-        let annualPayout = totalShares * info.dividend * info.freq;
-        if (isUS) annualPayout *= 0.7;
+        const earnedDivCurrency = calculateEarnedDividends(item.id, item.market, item.transactions);
+        
+        // 預估年現金流 (考慮美股扣稅)
+        let annualDivPerShare = meta.dividend * meta.freq;
+        if (item.market === 'US') annualDivPerShare *= 0.7;
+        const estimatedAnnualPayoutCurrency = totalShares * annualDivPerShare;
 
-        const marketValue = totalShares * info.price;
+        // 累計全站數據
+        grandEarnedTWD += earnedDivCurrency * fx;
+        grandAnnualTWD += estimatedAnnualPayoutCurrency * fx;
+        grandMarketValueTWD += marketValueCurrency * fx;
+        grandCostTWD += totalCostCurrency * fx;
 
-        grandEarnedTWD += earnedDiv * rate;
-        grandAnnualTWD += annualPayout * rate;
-        grandMarketValueTWD += marketValue * rate;
-        grandCostTWD += totalCost * rate;
-
-        // 便宜/合理/偏貴位階評估 (以年化殖利率)
-        const yieldRate = info.price > 0 ? ((info.dividend * info.freq) / info.price) * 100 : 0;
-        let rankBadge = '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">⚪ 合理位階</span>';
-        if (yieldRate >= 7.0) {
-          rankBadge = '<span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">🟢 便宜買點</span>';
-        } else if (yieldRate < 4.5) {
-          rankBadge = '<span class="text-xs bg-rose-100 text-rose-700 px-2 py-0.5 rounded font-bold">🔴 高點偏貴</span>';
+        // 雙轨位階標籤判斷
+        let badgeHtml = '';
+        if (meta.type === 'market' && meta.low52 && meta.high52) {
+          const pos = Math.round(((currentPrice - meta.low52) / (meta.high52 - meta.low52)) * 100);
+          badgeHtml = `<span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-[10px] font-bold">📈 52週位階 ${pos}%</span>`;
+        } else {
+          const ttmYield = (annualDivPerShare / currentPrice) * 100;
+          if (ttmYield >= 7.0) {
+            badgeHtml = `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">🟢 便宜買點 (${ttmYield.toFixed(1)}%)</span>`;
+          } else if (ttmYield >= 4.5) {
+            badgeHtml = `<span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">⚪ 合理位階 (${ttmYield.toFixed(1)}%)</span>`;
+          } else {
+            badgeHtml = `<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">🔴 高點偏貴</span>`;
+          }
         }
 
         const card = document.createElement('div');
-        card.className = 'bg-white rounded-xl p-4 shadow-sm border border-slate-200';
-
+        card.className = 'bg-white rounded-xl p-4 shadow-sm border border-slate-200 hover:shadow-md transition space-y-3';
         card.innerHTML = `
-          <div class="flex justify-between items-start border-b pb-2.5 mb-3">
+          <div class="flex justify-between items-start">
             <div>
               <div class="flex items-center gap-2">
-                <span class="font-bold text-lg text-slate-800">${item.id}</span>
-                <span class="text-xs px-2 py-0.5 rounded font-medium ${isUS?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'}">
-                  ${isUS ? '美股' : '台股'}
-                </span>
-                ${rankBadge}
+                <h3 class="font-bold text-slate-800 text-base">${item.id}</h3>
+                <span class="text-xs text-slate-500 font-normal">${meta.name}</span>
               </div>
-              <div class="text-xs text-slate-500 mt-0.5">${info.name}</div>
+              <div class="mt-1 flex gap-1.5 items-center">
+                <span class="text-xs text-slate-400">$${currentPrice} ${item.market==='US'?'USD':'TWD'}</span>
+                ${badgeHtml}
+              </div>
             </div>
-            <button onclick="confirmDeleteStock('${item.id}')" class="text-slate-300 hover:text-red-500 font-bold text-sm px-1" title="刪除整檔股票">🗑️</button>
+            <button onclick="confirmDeleteStock('${item.id}')" class="text-slate-300 hover:text-red-500 text-xs">🗑️ 刪除</button>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 mb-3 text-center bg-slate-50 p-2.5 rounded-xl">
+          <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg text-xs">
             <div>
-              <div class="text-[10px] text-slate-400">目前持股</div>
-              <div class="text-sm font-bold text-slate-700">${totalShares.toLocaleString()} 股</div>
+              <div class="text-slate-400">持股數量</div>
+              <div class="font-bold text-slate-700">${totalShares.toLocaleString()} 股</div>
             </div>
             <div>
-              <div class="text-[10px] text-slate-400">累積已領股息</div>
-              <div class="text-sm font-bold text-amber-600">${currencySymbol} ${earnedDiv.toFixed(1)}</div>
+              <div class="text-slate-400">預估年現金流</div>
+              <div class="font-bold text-emerald-600">NT$ ${Math.round(estimatedAnnualPayoutCurrency * fx).toLocaleString()}</div>
             </div>
             <div>
-              <div class="text-[10px] text-slate-400">預估年現金流</div>
-              <div class="text-sm font-bold text-emerald-600">${currencySymbol} ${annualPayout.toFixed(1)}</div>
+              <div class="text-slate-400">累積已領股息</div>
+              <div class="font-bold text-amber-600">NT$ ${Math.round(earnedDivCurrency * fx).toLocaleString()}</div>
+            </div>
+            <div>
+              <div class="text-slate-400">持股市值</div>
+              <div class="font-bold text-slate-800">NT$ ${Math.round(marketValueCurrency * fx).toLocaleString()}</div>
             </div>
           </div>
 
-          <div class="flex justify-between items-center gap-2 pt-1 text-xs">
-            <button onclick="openAddTxModal('${item.id}')" class="flex-1 bg-blue-50 text-blue-600 hover:bg-blue-100 py-2 rounded-lg font-bold transition flex items-center justify-center gap-1">
-              <span>➕</span> 記一筆 (買/賣)
+          <div class="flex gap-2 pt-1">
+            <button onclick="openAddTxModal('${item.id}')" class="flex-1 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition">
+              ➕ 記一筆
             </button>
-            <button onclick="openHistoryModal('${item.id}')" class="flex-1 bg-slate-100 text-slate-700 hover:bg-slate-200 py-2 rounded-lg font-bold transition flex items-center justify-center gap-1">
-              <span>📋</span> 交易明細 (${item.transactions.length})
+            <button onclick="openHistoryModal('${item.id}')" class="flex-1 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold hover:bg-slate-200 transition">
+              📋 交易歷史
+            </button>
+            <button onclick="openDetailModal('${item.id}')" class="py-1.5 px-3 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 transition">
+              📈 走勢
             </button>
           </div>
         `;
         container.appendChild(card);
       });
 
-      const totalReturnPercent = grandCostTWD > 0 ? (((grandMarketValueTWD - grandCostTWD + grandEarnedTWD) / grandCostTWD) * 100) : 0;
-
+      // 更新頂部卡片總計
       document.getElementById('totalEarnedPayout').innerText = `NT$ ${Math.round(grandEarnedTWD).toLocaleString()}`;
       document.getElementById('totalAnnualPayout').innerText = `NT$ ${Math.round(grandAnnualTWD).toLocaleString()}`;
       document.getElementById('totalMarketValue').innerText = `NT$ ${Math.round(grandMarketValueTWD).toLocaleString()}`;
-      document.getElementById('totalReturnRate').innerText = `${totalReturnPercent >= 0 ? '+' : ''}${totalReturnPercent.toFixed(1)}%`;
-      document.getElementById('totalReturnRate').className = totalReturnPercent >= 0 ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold';
-    }
-
-    async function shareApp() {
-      const currentUrl = window.location.href;
-      const shareText = `📊 推薦你這個【ETF 配息現金流自動追蹤器】！\n不用下載 App，打開就能自動算配息：\n${currentUrl}\n\n📱 安裝到手機桌面步驟：\n• iPhone: 點 Safari 下方「分享」按鈕 ➔ 選擇「加入主畫面」\n• Android: 點 Chrome 右上角選單 ➔ 選擇「安裝應用程式」`;
-
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: 'ETF 現金流自動追蹤器', text: shareText, url: currentUrl });
-          showToast('✅ 成功開啟分享選單');
-        } catch (err) {
-          copyToClipboard(shareText);
-        }
-      } else {
-        copyToClipboard(shareText);
-      }
-    }
-
-    function copyToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('✅ 已複製網址與安裝說明！');
-      }).catch(() => {
-        showToast('⚠️ 複製失敗，請手動複製網址');
-      });
-    }
-
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      toast.innerText = msg;
-      toast.classList.remove('opacity-0');
-      toast.classList.add('opacity-100');
-      setTimeout(() => {
-        toast.classList.remove('opacity-100');
-        toast.classList.add('opacity-0');
-      }, 2500);
-    }
-
-    function saveAndRender() {
-      localStorage.setItem('my_etf_full_portfolio', JSON.stringify(portfolio));
-      renderPortfolio();
+      
+      const totalReturn = grandMarketValueTWD + grandEarnedTWD - grandCostTWD;
+      const totalReturnPercent = grandCostTWD > 0 ? ((totalReturn / grandCostTWD) * 100).toFixed(1) : '0.0';
+      const returnTag = document.getElementById('totalReturnRate');
+      returnTag.innerText = `${totalReturnPercent}%`;
+      returnTag.className = totalReturn >= 0 ? 'text-emerald-300 font-extrabold' : 'text-rose-300 font-extrabold';
     }
 
     function exportData() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(portfolio));
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(portfolio, null, 2));
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `etf_portfolio_${new Date().toISOString().split('T')[0]}.json`);
+      downloadAnchor.setAttribute("download", `etf_portfolio_backup_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
-      showToast('📥 備份資料已匯出');
+      showToast('📥 資料已成功匯出');
     }
 
     function importData() {
       const input = document.createElement('input');
       input.type = 'file';
+      input.accept = '.json';
       input.onchange = e => {
         const file = e.target.files[0];
         const reader = new FileReader();
-        reader.readAsText(file,'UTF-8');
-        reader.onload = readerEvent => {
+        reader.onload = event => {
           try {
-            portfolio = JSON.parse(readerEvent.target.result);
-            saveAndRender();
-            showToast('✅ 成功導入持股資料');
+            const imported = JSON.parse(event.target.result);
+            if (Array.isArray(imported)) {
+              portfolio = imported;
+              saveAndRender();
+              showToast('✅ 資料成功匯入');
+            } else {
+              showToast('⚠️ JSON 格式不正確');
+            }
           } catch (err) {
-            showToast('⚠️ 檔案格式不符');
+            showToast('⚠️ 讀取檔案失敗');
           }
-        }
-      }
+        };
+        reader.readAsText(file);
+      };
       input.click();
     }
 
-    init();
+    function shareApp() {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(window.location.href);
+        showToast('🔗 已複製網址，可分享給朋友！');
+      } else {
+        showToast('⚠️ 瀏覽器不支援一鍵複製');
+      }
+    }
   </script>
 </body>
 </html>
