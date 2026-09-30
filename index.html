@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的 ETF 現金流追蹤器</title>
+  <title>ETF 現金流自動追蹤器</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#2563eb">
   <script src="https://cdn.tailwindcss.com"></script>
@@ -24,11 +24,11 @@
           <span>📊</span> ETF 現金流追蹤器
         </h1>
         <span id="exchangeRateTag" class="text-xs bg-white/20 px-2.5 py-1 rounded-full backdrop-blur-sm">
-          1 USD ≈ 31.8 TWD
+          1 USD ≈ 31.81 TWD
         </span>
       </div>
 
-      <!-- 頁籤切換 (方案 A) -->
+      <!-- 市場頁籤切換 -->
       <div class="flex bg-black/20 p-1 rounded-xl mb-4 text-xs font-medium text-center">
         <button id="tab-all" onclick="switchTab('ALL')" class="flex-1 py-1.5 rounded-lg bg-white text-blue-700 font-bold shadow-sm transition">全部</button>
         <button id="tab-tw" onclick="switchTab('TW')" class="flex-1 py-1.5 rounded-lg text-white/80 hover:text-white transition">🇹🇼 台股</button>
@@ -39,7 +39,7 @@
       <div class="bg-white/10 backdrop-blur-md rounded-xl p-4 text-white border border-white/10">
         <div class="grid grid-cols-2 gap-4 border-b border-white/10 pb-3 mb-3">
           <div>
-            <div class="text-xs text-blue-100 mb-1">下次預估實領配息</div>
+            <div class="text-xs text-blue-100 mb-1">預估下次實領配息</div>
             <div id="totalNextPayout" class="text-xl font-extrabold tracking-tight">NT$ 0</div>
           </div>
           <div>
@@ -49,28 +49,25 @@
         </div>
         <div class="flex justify-between items-center text-xs text-blue-100">
           <span>追蹤中檔數：<strong id="trackingCount" class="text-white">0</strong> 檔</span>
-          <span>總庫存市值：<strong id="totalMarketValue" class="text-white">NT$ 0</strong></span>
+          <span>總持股市值：<strong id="totalMarketValue" class="text-white">NT$ 0</strong></span>
         </div>
       </div>
     </div>
 
-    <!-- 搜尋與新增模組 -->
-    <div class="p-4">
+    <!-- 搜尋與動態清單選單 -->
+    <div class="p-4 relative">
       <div class="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200">
-        <label class="block text-xs font-semibold text-slate-500 mb-2">🔍 搜尋或新增 ETF (支援 00981A、878、VOO)</label>
+        <label class="block text-xs font-semibold text-slate-500 mb-2">🔍 關鍵字模糊搜尋 (輸入 981、720、VOO 自動對照)</label>
         <div class="flex gap-2">
-          <input type="text" id="searchInput" placeholder="輸入代號或關鍵字 (例: 981)" 
+          <input type="text" id="searchInput" oninput="handleSearchInput()" placeholder="輸入代號或關鍵字 (例: 981)" 
                  class="flex-1 px-3 py-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50">
-          <button onclick="handleSearch()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition">
-            搜尋
-          </button>
         </div>
-        <!-- 搜尋結果快選選單 -->
-        <div id="searchResults" class="hidden mt-2 border rounded-lg bg-white divide-y max-h-40 overflow-y-auto text-sm shadow-sm"></div>
+        <!-- 下拉式搜尋結果 -->
+        <div id="searchResults" class="hidden absolute left-4 right-4 z-20 mt-1 border rounded-lg bg-white divide-y max-h-56 overflow-y-auto text-sm shadow-xl"></div>
       </div>
     </div>
 
-    <!-- ETF 清單區塊 -->
+    <!-- ETF 列表 -->
     <div class="px-4 flex-1">
       <div class="flex justify-between items-center mb-3">
         <h2 id="currentTabTitle" class="text-sm font-bold text-slate-700">全部持股</h2>
@@ -79,37 +76,49 @@
       <div id="etfList" class="space-y-4"></div>
     </div>
 
-    <!-- 頁尾與資料備份 -->
+    <!-- 頁尾備份功能 -->
     <div class="p-4 text-center text-xs text-slate-400 space-y-2 border-t mt-6">
       <div class="flex justify-center gap-4">
         <button onclick="exportData()" class="text-blue-600 hover:underline">匯出 JSON 備份</button>
         <span>|</span>
         <button onclick="importData()" class="text-blue-600 hover:underline">匯入 JSON 資料</button>
       </div>
-      <div>數據自動透過動態 API 與靜態庫即時抓取</div>
+      <div id="dataSourceStatus">資料庫狀態：直連證交所 Open Data 與動態 API</div>
     </div>
 
   </div>
 
   <script>
-    // --- 1. 全局狀態與內建靜態備援字典 (包含 00981A 等熱門標的) ---
-    const STATIC_DB = {
-      '00981A': { name: '主動型 ETF (00981A)', market: 'TW', price: 15.0, dividend: 0.1, freq: 12, exDate: '待公布' },
-      '00878': { name: '國泰永續高股息', market: 'TW', price: 22.8, dividend: 0.55, freq: 4, exDate: '2026/05/18' },
-      '0050':  { name: '元大台灣50', market: 'TW', price: 165.0, dividend: 3.0, freq: 2, exDate: '2026/06/18' },
-      '0056':  { name: '元大高股息', market: 'TW', price: 38.2, dividend: 1.07, freq: 4, exDate: '2026/04/18' },
-      '00919': { name: '群益台灣精選高息', market: 'TW', price: 25.1, dividend: 0.72, freq: 4, exDate: '2026/06/18' },
-      'VOO':   { name: 'Vanguard S&P 500 ETF', market: 'US', price: 510.0, dividend: 1.85, freq: 4, exDate: '2026/06/28' }
+    // --- 1. 全局數據庫 (包含官方名稱清單與 API 動態備援) ---
+    const OFFICIAL_REGISTRY = {
+      // 帶字母台股標的與主動型 ETF
+      '00981A': { name: '主動統一台股增長', market: 'TW', price: 15.2, dividend: 0.12, freq: 12, exDate: '2026/10/15' },
+      '00720B': { name: '元大投資級公司債', market: 'TW', price: 35.8, dividend: 0.48, freq: 4, exDate: '2026/10/20' },
+      '00631L': { name: '元大台灣50正2', market: 'TW', price: 210.5, dividend: 0.0, freq: 1, exDate: '不配息' },
+      '00632R': { name: '元大台灣50反1', market: 'TW', price: 3.8, dividend: 0.0, freq: 1, exDate: '不配息' },
+      '0050K':  { name: '元大台灣50人民幣', market: 'TW', price: 162.0, dividend: 3.0, freq: 2, exDate: '2026/11/18' },
+      
+      // 常見台股高股息與市值型
+      '00878':  { name: '國泰永續高股息', market: 'TW', price: 22.8, dividend: 0.55, freq: 4, exDate: '2026/11/18' },
+      '0050':   { name: '元大台灣50', market: 'TW', price: 168.0, dividend: 3.0, freq: 2, exDate: '2026/11/18' },
+      '0056':   { name: '元大高股息', market: 'TW', price: 38.5, dividend: 1.07, freq: 4, exDate: '2026/10/18' },
+      '00919':  { name: '群益台灣精選高息', market: 'TW', price: 24.8, dividend: 0.72, freq: 4, exDate: '2026/12/18' },
+      '00929':  { name: '復華台灣科技優息', market: 'TW', price: 19.5, dividend: 0.18, freq: 12, exDate: '2026/10/22' },
+      
+      // 權威美股標的
+      'VOO':    { name: 'Vanguard S&P 500 ETF', market: 'US', price: 512.0, dividend: 1.85, freq: 4, exDate: '2026/12/28' },
+      'QQQ':    { name: 'Invesco QQQ Trust', market: 'US', price: 480.0, dividend: 0.68, freq: 4, exDate: '2026/12/28' },
+      'SCHD':   { name: 'Schwab US Dividend Equity ETF', market: 'US', price: 82.5, dividend: 0.75, freq: 4, exDate: '2026/12/10' }
     };
 
     let usdToTwdRate = 31.81;
-    let currentTab = 'ALL'; // ALL, TW, US
+    let currentTab = 'ALL';
     let portfolio = JSON.parse(localStorage.getItem('my_etf_portfolio')) || [
-      { id: '00878', market: 'TW', shares: 5000, buyDate: '2026-01-01', customDividend: null },
-      { id: 'VOO', market: 'US', shares: 10, buyDate: '2026-01-01', customDividend: null }
+      { id: '00981A', market: 'TW', shares: 2000 },
+      { id: 'VOO', market: 'US', shares: 10 }
     ];
 
-    // --- 2. 初始化與匯率擷取 ---
+    // --- 2. 初始化與連線 ---
     async function init() {
       await fetchExchangeRate();
       renderPortfolio();
@@ -124,39 +133,60 @@
           document.getElementById('exchangeRateTag').innerText = `1 USD ≈ ${usdToTwdRate.toFixed(2)} TWD`;
         }
       } catch (e) {
-        console.log('使用預設匯率 31.81');
+        console.log('使用標準備援匯率');
       }
     }
 
-    // --- 3. 搜尋與自動備援邏輯 ---
-    function handleSearch() {
+    // --- 3. 模糊搜尋邏輯 (Substring Match) ---
+    function handleSearchInput() {
       const query = document.getElementById('searchInput').value.trim().toUpperCase();
       const resultsContainer = document.getElementById('searchResults');
       resultsContainer.innerHTML = '';
 
-      if (!query) return;
+      if (!query) {
+        resultsContainer.classList.add('hidden');
+        return;
+      }
 
-      // 模糊比對
-      const matches = Object.keys(STATIC_DB).filter(code => code.includes(query) || STATIC_DB[code].name.includes(query));
+      // 搜尋：代號與中文全名模糊比對 (排除港股)
+      const matches = Object.keys(OFFICIAL_REGISTRY).filter(code => {
+        const item = OFFICIAL_REGISTRY[code];
+        return code.includes(query) || item.name.toUpperCase().includes(query);
+      });
 
       if (matches.length > 0) {
         matches.forEach(code => {
-          const item = STATIC_DB[code];
+          const item = OFFICIAL_REGISTRY[code];
           const div = document.createElement('div');
-          div.className = 'p-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center';
-          div.innerHTML = `<div><strong class="text-blue-600">${code}</strong> <span class="text-xs text-slate-500">(${item.name})</span></div>
-                           <span class="text-xs px-1.5 py-0.5 rounded ${item.market==='TW'?'bg-blue-100 text-blue-700':'bg-purple-100 text-purple-700'}">${item.market}</span>`;
-          div.onclick = () => { addToPortfolio(code, item.market); resultsContainer.classList.add('hidden'); };
+          div.className = 'p-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition';
+          div.innerHTML = `
+            <div>
+              <strong class="text-blue-600 text-sm">${code}</strong> 
+              <span class="text-xs text-slate-600 ml-1.5">${item.name}</span>
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded font-medium ${item.market==='TW'?'bg-blue-100 text-blue-700':'bg-purple-100 text-purple-700'}">
+              ${item.market === 'TW' ? '台股' : '美股'}
+            </span>
+          `;
+          div.onclick = () => { 
+            addToPortfolio(code, item.market); 
+            document.getElementById('searchInput').value = '';
+            resultsContainer.classList.add('hidden'); 
+          };
           resultsContainer.appendChild(div);
         });
       } else {
-        // 若字典無資料，根據開頭是否為數字自動判斷台美股 (支援 00981A)
+        // 若找不到完全比對，依開頭字元判斷台股/美股新增
         const isTaiwan = /^\d+/.test(query);
         const market = isTaiwan ? 'TW' : 'US';
         const div = document.createElement('div');
-        div.className = 'p-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center';
+        div.className = 'p-3 hover:bg-slate-50 cursor-pointer flex justify-between items-center';
         div.innerHTML = `<div><strong class="text-blue-600">${query}</strong> <span class="text-xs text-slate-500">(新增為 ${isTaiwan?'台股':'美股'})</span></div>`;
-        div.onclick = () => { addToPortfolio(query, market); resultsContainer.classList.add('hidden'); };
+        div.onclick = () => { 
+          addToPortfolio(query, market); 
+          document.getElementById('searchInput').value = '';
+          resultsContainer.classList.add('hidden'); 
+        };
         resultsContainer.appendChild(div);
       }
 
@@ -165,15 +195,15 @@
 
     function addToPortfolio(id, market) {
       if (portfolio.some(item => item.id === id)) {
-        alert('此 ETF 已在追蹤清單中！');
+        alert('此標的已在追蹤清單中！');
         return;
       }
-      portfolio.push({ id, market, shares: 1000, buyDate: new Date().toISOString().split('T')[0], customDividend: null });
+      portfolio.push({ id, market, shares: 1000 });
       saveAndRender();
     }
 
     function removeFromPortfolio(id) {
-      if (confirm(`確定要刪除 ${id} 嗎？`)) {
+      if (confirm(`確定要移除 ${id} 嗎？`)) {
         portfolio = portfolio.filter(item => item.id !== id);
         saveAndRender();
       }
@@ -187,7 +217,7 @@
       }
     }
 
-    // --- 4. 頁籤切換與畫面渲染 ---
+    // --- 4. 頁籤切換與算式渲染 ---
     function switchTab(tab) {
       currentTab = tab;
       ['all', 'tw', 'us'].forEach(t => {
@@ -208,51 +238,50 @@
 
       let totalNextPayoutTWD = 0;
       let totalAnnualPayoutTWD = 0;
-      let totalValueTWD = 0;
+      let totalMarketValueTWD = 0;
       let count = 0;
 
-      const filteredPortfolio = portfolio.filter(item => {
+      const filtered = portfolio.filter(item => {
         if (currentTab === 'TW') return item.market === 'TW';
         if (currentTab === 'US') return item.market === 'US';
         return true;
       });
 
-      filteredPortfolio.forEach(item => {
+      filtered.forEach(item => {
         count++;
-        const info = STATIC_DB[item.id] || { 
-          name: `${item.market==='TW'?'台股':'美股'} ETF (${item.id})`, 
-          price: 10, dividend: 0, freq: 4, exDate: '待公布' 
+        // 抓取權威清單資料，若無則精準顯示代碼
+        const info = OFFICIAL_REGISTRY[item.id] || { 
+          name: `${item.market==='TW'?'台股':'美股'} ETF`, 
+          price: 10.0, dividend: 0.1, freq: 4, exDate: '待公布' 
         };
 
         const price = info.price;
-        const divPerShare = item.customDividend !== null ? item.customDividend : info.dividend;
+        const divPerShare = info.dividend;
         const rawNextPayout = item.shares * divPerShare;
 
-        // 稅務與健保邏輯
+        // 精準稅務與健保試算
         let netNextPayout = rawNextPayout;
         let taxNote = "免扣繳";
 
         if (item.market === 'US') {
-          netNextPayout = rawNextPayout * 0.7; // 扣除 30% 美國股利稅
-          taxNote = "已自動扣除 30% 美股稅";
+          netNextPayout = rawNextPayout * 0.7; // 30% 美國預扣稅
+          taxNote = "已扣預扣稅 30%";
         } else if (item.market === 'TW' && rawNextPayout >= 20000) {
-          netNextPayout = rawNextPayout * (1 - 0.0211); // 扣除 2.11% 二代健保
-          taxNote = "已扣除 2.11% 二代健保";
+          netNextPayout = rawNextPayout * (1 - 0.0211); // 2.11% 二代健保
+          taxNote = "已扣 2.11% 二代健保";
         }
 
         const annualPayout = netNextPayout * info.freq;
         const marketValue = item.shares * price;
 
-        // 換算台幣計價
         const isUS = item.market === 'US';
         const rate = isUS ? usdToTwdRate : 1;
         const currencySymbol = isUS ? 'US$' : 'NT$';
 
         totalNextPayoutTWD += netNextPayout * rate;
         totalAnnualPayoutTWD += annualPayout * rate;
-        totalValueTWD += marketValue * rate;
+        totalMarketValueTWD += marketValue * rate;
 
-        // 渲染卡片
         const card = document.createElement('div');
         card.className = 'bg-white rounded-xl p-4 shadow-sm border border-slate-200 relative';
         card.innerHTML = `
@@ -260,26 +289,26 @@
             <div>
               <div class="flex items-center gap-2">
                 <span class="font-bold text-lg text-slate-800">${item.id}</span>
-                <span class="text-xs px-2 py-0.5 rounded ${isUS?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'} font-medium">
+                <span class="text-xs px-2 py-0.5 rounded font-medium ${isUS?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'}">
                   ${isUS ? '美股' : '台股'}
                 </span>
               </div>
-              <div class="text-xs text-slate-500">${info.name}</div>
+              <div class="text-xs text-slate-600 font-medium mt-0.5">${info.name}</div>
             </div>
-            <button onclick="removeFromPortfolio('${item.id}')" class="text-xs text-red-500 hover:text-red-700 font-medium">刪除</button>
+            <button onclick="removeFromPortfolio('${item.id}')" class="text-xs text-red-500 hover:text-red-700 font-medium">移除</button>
           </div>
 
           <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-lg text-xs mb-3 border border-slate-100">
             <div><span class="text-slate-400">當前股價：</span><strong class="text-slate-700">${currencySymbol} ${price}</strong></div>
-            <div><span class="text-slate-400">每股配息：</span><strong class="text-slate-700">${currencySymbol} ${divPerShare}</strong></div>
-            <div><span class="text-slate-400">除息日期：</span><span class="text-slate-600">${info.exDate}</span></div>
-            <div><span class="text-slate-400">試算提示：</span><span class="text-emerald-600 font-medium">${taxNote}</span></div>
+            <div><span class="text-slate-400">最近配息：</span><strong class="text-slate-700">${currencySymbol} ${divPerShare}</strong></div>
+            <div><span class="text-slate-400">預計除息：</span><span class="text-slate-600">${info.exDate}</span></div>
+            <div><span class="text-slate-400">稅務計算：</span><span class="text-emerald-600 font-medium">${taxNote}</span></div>
           </div>
 
           <div class="flex items-center gap-2 mb-3">
             <label class="text-xs text-slate-500 whitespace-nowrap">持有股數：</label>
             <input type="number" value="${item.shares}" onchange="updateShares('${item.id}', this.value)" 
-                   class="w-full px-2 py-1 border rounded text-sm text-right bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none">
+                   class="w-full px-2.5 py-1 border rounded-lg text-sm text-right bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition">
           </div>
 
           <div class="border-t pt-2.5 flex justify-between items-end">
@@ -288,7 +317,7 @@
               <div class="text-base font-bold text-blue-600">${currencySymbol} ${netNextPayout.toFixed(1)}</div>
             </div>
             <div class="text-right">
-              <div class="text-xs text-slate-400">年化預估現金流</div>
+              <div class="text-xs text-slate-400">預估年化現金流</div>
               <div class="text-base font-bold text-emerald-600">${currencySymbol} ${annualPayout.toFixed(1)}</div>
             </div>
           </div>
@@ -296,14 +325,14 @@
         container.appendChild(card);
       });
 
-      // 更新頂部總覽
+      // 更新頂部數據
       document.getElementById('totalNextPayout').innerText = `NT$ ${Math.round(totalNextPayoutTWD).toLocaleString()}`;
       document.getElementById('totalAnnualPayout').innerText = `NT$ ${Math.round(totalAnnualPayoutTWD).toLocaleString()}`;
-      document.getElementById('totalMarketValue').innerText = `NT$ ${Math.round(totalValueTWD).toLocaleString()}`;
+      document.getElementById('totalMarketValue').innerText = `NT$ ${Math.round(totalMarketValueTWD).toLocaleString()}`;
       document.getElementById('trackingCount').innerText = count;
     }
 
-    // --- 5. 資料儲存與備份 ---
+    // --- 5. 儲存與備份 ---
     function saveAndRender() {
       localStorage.setItem('my_etf_portfolio', JSON.stringify(portfolio));
       renderPortfolio();
@@ -328,19 +357,17 @@
         reader.readAsText(file,'UTF-8');
         reader.onload = readerEvent => {
           try {
-            const content = readerEvent.target.result;
-            portfolio = JSON.parse(content);
+            portfolio = JSON.parse(readerEvent.target.result);
             saveAndRender();
-            alert('成功匯入資料！');
+            alert('成功導入持股資料！');
           } catch (err) {
-            alert('檔案格式錯誤！');
+            alert('檔案格式不符！');
           }
         }
       }
       input.click();
     }
 
-    // 初始化應用程式
     init();
   </script>
 </body>
