@@ -9,361 +9,410 @@
 :root{--bg:#121212;--card:#1e1e1e;--text:#e0e0e0;--sub:#a0a0a0;--accent:#4caf50;--danger:#f44336;--warn:#ff9800;--border:#333}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:16px;display:flex;flex-direction:column;align-items:center}
 .container{width:100%;max-width:800px}
-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:20px}
+header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:16px;gap:8px}
 h2,h3,h4{margin:0}
-button{background:var(--accent);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:bold}
+button{background:var(--accent);color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold}
 button:disabled{opacity:.6}
 button.secondary{background:#333;color:var(--text)}
 button.danger{background:var(--danger)}
-.banner{background:var(--warn);color:#000;padding:8px 12px;border-radius:6px;margin-bottom:16px;font-size:.85rem;font-weight:bold;display:none}
-.summary{background:var(--card);border-radius:12px;padding:20px;margin-bottom:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;border:1px solid var(--border)}
+button.sm{padding:3px 8px;font-size:.75rem}
+.banner{background:var(--warn);color:#000;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:.85rem;font-weight:bold;display:none}
+.summary{background:var(--card);border-radius:12px;padding:16px;margin-bottom:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;border:1px solid var(--border)}
 .stat{display:flex;flex-direction:column}
-.stat-label{color:var(--sub);font-size:.85rem}
-.stat-value{font-size:1.4rem;font-weight:bold;margin-top:4px}
+.sub{color:var(--sub);font-size:.85rem}
+.sv{font-size:1.25rem;font-weight:bold;margin-top:4px}
+.up{color:#ef5350}.dn{color:#4caf50}
 .list{display:flex;flex-direction:column;gap:12px}
-.card{background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.card{background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px}
 .card:hover{border-color:var(--accent)}
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);justify-content:center;align-items:center;padding:16px;z-index:100}
-.modal-content{background:var(--card);border-radius:12px;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;padding:20px;border:1px solid var(--border)}
-.form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.r{text-align:right}.big{font-size:1.1rem;font-weight:bold}
+.badge{background:#333;padding:2px 6px;border-radius:4px;font-size:.7rem;margin-left:6px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);justify-content:center;align-items:center;padding:12px;z-index:100}
+.mc{background:var(--card);border-radius:12px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:18px;border:1px solid var(--border)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fg{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
 input,select{background:#2a2a2a;border:1px solid var(--border);color:#fff;padding:8px;border-radius:6px}
-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:.9rem}
-th,td{border-bottom:1px solid var(--border);padding:8px;text-align:left}
-.toolbar{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap}
-.chart-box{position:relative;height:200px;margin-bottom:16px}
+.lock{background:#262626;border:1px solid var(--border);padding:8px;border-radius:6px;font-weight:bold}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.85rem}
+th,td{border-bottom:1px solid var(--border);padding:6px;text-align:left}
+.nw{white-space:nowrap}
+.toolbar,.btns{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.btns{margin:16px 0 0}
+.chart-box{position:relative;height:200px;margin:8px 0 16px}
 .note{color:var(--sub);font-size:.8rem;margin-top:8px}
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h2>ETF 資產與現金流追蹤</h2>
-    <button id="refreshBtn" onclick="fetchAllPrices()">🔄 更新即時股價</button>
+    <div><h2>ETF 資產與現金流追蹤</h2><div class="sub" id="updated"></div></div>
+    <button id="refreshBtn" onclick="fetchAll()">🔄 更新股價</button>
   </header>
   <div class="banner" id="banner"></div>
+  <div class="banner" id="bkBanner"></div>
 
   <div class="summary">
-    <div class="stat"><span class="stat-label">總市值 (TWD)</span><span class="stat-value" id="totalValue">$0</span></div>
-    <div class="stat"><span class="stat-label">預估年化現金流 (近12個月配息)</span><span class="stat-value" id="totalCashflow">$0</span></div>
-    <div class="stat"><span class="stat-label">累積已領股息</span><span class="stat-value" id="totalReceived">$0</span></div>
+    <div class="stat"><span class="sub">總市值 (TWD)</span><span class="sv" id="sMV">$0</span></div>
+    <div class="stat"><span class="sub">總成本</span><span class="sv" id="sCost">$0</span></div>
+    <div class="stat"><span class="sub">未實現損益</span><span class="sv" id="sUn">-</span></div>
+    <div class="stat"><span class="sub">已實現損益</span><span class="sv" id="sReal">-</span></div>
+    <div class="stat"><span class="sub">今年已入帳股息</span><span class="sv" id="sGot">$0</span></div>
+    <div class="stat"><span class="sub">已公布、待入帳</span><span class="sv" id="sPend">$0</span></div>
   </div>
+  <div class="note" id="refNote" style="display:none;margin:0 0 12px"></div>
 
   <div class="toolbar">
-    <button onclick="openTradeForm()">＋ 新增交易紀錄</button>
-    <button class="secondary" onclick="exportData()">💾 匯出備份 (JSON)</button>
-    <button class="secondary" onclick="document.getElementById('importFile').click()">📂 匯入備份</button>
+    <button onclick="addSymbol()">＋ 追蹤標的</button>
+    <button class="secondary" onclick="exportData()">💾 匯出備份</button>
+    <button class="secondary" onclick="$('importFile').click()">📂 匯入備份</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleFileSelect(event)">
   </div>
 
-  <h3>持股清單</h3>
-  <div class="list" id="stockList"></div>
-  <div class="note">美股標的以 USDTWD 匯率換算為台幣。預估現金流 = 近12個月每股配息 × 目前持股，僅供參考。</div>
+  <h3>持股與追蹤清單</h3>
+  <div class="list" id="stockList" style="margin-top:12px"></div>
+  <div class="note">點卡片可查看走勢並記錄買賣、配息。紅色代表賺、綠色代表賠。美股以 USDTWD 匯率換算為台幣。資料只存在這個瀏覽器，請定期匯出備份。</div>
 </div>
 
-<div class="modal" id="detailModal">
-  <div class="modal-content">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <h3 id="modalTitle">持股詳細資訊</h3>
-      <button class="secondary" onclick="closeModal()">✕ 關閉</button>
-    </div>
-    <div style="margin-top:16px">
-      <h4>近三個月真實價格走勢</h4>
-      <div class="chart-box"><canvas id="priceChart"></canvas></div>
-      <h4>歷史交易紀錄</h4>
-      <table>
-        <thead><tr><th>日期</th><th>類型</th><th>股數/金額</th><th>單價</th><th>操作</th></tr></thead>
-        <tbody id="tradeBody"></tbody>
-      </table>
-      <div style="margin-top:16px;display:flex;justify-content:space-between">
-        <button onclick="openTradeForm(activeSymbol)">＋ 新增此標的交易</button>
-        <button class="danger" onclick="deleteCurrentStock()">🗑️ 刪除此持股</button>
-      </div>
-    </div>
-  </div>
-</div>
+<div class="modal" id="symModal"><div class="mc">
+  <h3>新增追蹤標的</h3>
+  <form onsubmit="saveSymbol(event)" style="margin-top:12px">
+    <div class="fg"><label>股票/ETF 代碼（上市如 0050、上櫃如 00720B、美股如 VOO）</label>
+      <input id="s_symbol" required placeholder="例如 0050" autocapitalize="characters" autocomplete="off"></div>
+    <div class="row" style="justify-content:flex-start"><button type="submit">加入</button><button type="button" class="secondary" onclick="closeM('symModal')">取消</button></div>
+  </form>
+</div></div>
 
-<div class="modal" id="tradeModal">
-  <div class="modal-content">
-    <h3>新增交易紀錄</h3>
-    <form onsubmit="saveTrade(event)" style="margin-top:12px">
-      <div class="form-group"><label>股票/ETF代碼 (上市如 0050、上櫃如 00720B、美股如 VOO)</label>
-        <input type="text" id="formSymbol" required placeholder="例如: 0050"></div>
-      <div class="form-group"><label>交易類型</label>
-        <select id="formType"><option value="BUY">買入</option><option value="SELL">賣出</option><option value="DIVIDEND">收到股息</option></select></div>
-      <div class="form-group"><label>日期</label><input type="date" id="formDate" required></div>
-      <div class="form-group"><label>股數 (收到股息時，請填總收到金額，單位 TWD)</label>
-        <input type="number" step="0.001" min="0" id="formShares" required></div>
-      <div class="form-group"><label>成交單價 (買賣時填寫，以該標的原幣別)</label>
-        <input type="number" step="0.01" min="0" id="formPrice" value="0"></div>
-      <div style="display:flex;gap:10px;margin-top:16px">
-        <button type="submit">儲存</button>
-        <button type="button" class="secondary" onclick="closeTradeModal()">取消</button>
-      </div>
-    </form>
+<div class="modal" id="detailModal"><div class="mc">
+  <div class="row"><h3 id="modalTitle"></h3><button class="secondary" onclick="closeM('detailModal')">✕ 關閉</button></div>
+  <div class="sub" id="detailSum" style="margin-top:8px"></div>
+  <h4 style="margin-top:12px">近三個月價格走勢</h4>
+  <div class="chart-box"><canvas id="priceChart"></canvas></div>
+  <h4>買賣紀錄</h4>
+  <div class="scroll"><table><thead><tr><th>日期</th><th>類型</th><th>股數</th><th>單價</th><th>費用</th><th></th></tr></thead><tbody id="tradeBody"></tbody></table></div>
+  <h4 style="margin-top:16px">配息紀錄</h4>
+  <div class="scroll"><table><thead><tr><th>除息日</th><th>發放日</th><th>每股</th><th>除息持股</th><th>應領</th><th>實領(TWD)</th><th></th></tr></thead><tbody id="divBody"></tbody></table></div>
+  <div class="btns">
+    <button onclick="openTradeForm(active)">＋ 買賣</button>
+    <button onclick="openDivForm(active)">＋ 配息</button>
+    <button class="secondary" onclick="importDivs(active)">帶入 Yahoo 配息</button>
+    <button class="danger" onclick="delSymbol()">🗑️ 刪除標的</button>
   </div>
-</div>
+</div></div>
+
+<div class="modal" id="tradeModal"><div class="mc">
+  <h3 id="tradeTitle">新增買賣紀錄</h3>
+  <form onsubmit="saveTrade(event)" style="margin-top:12px">
+    <input type="hidden" id="f_id">
+    <input type="hidden" id="f_symbol">
+    <div class="fg"><label>標的</label><div class="lock" id="f_symLabel"></div></div>
+    <div class="fg"><label>類型</label><select id="f_type"><option value="BUY">買入</option><option value="SELL">賣出</option></select></div>
+    <div class="fg"><label>日期</label><input type="date" id="f_date" required></div>
+    <div class="fg"><label>股數</label><input type="number" step="0.001" min="0" id="f_shares" required></div>
+    <div class="fg"><label>成交單價 (原幣別)</label><input type="number" step="0.01" min="0" id="f_price" required></div>
+    <div class="fg"><label>手續費 + 證交稅 (選填，原幣別)</label><input type="number" step="0.01" min="0" id="f_fee"></div>
+    <div class="row" style="justify-content:flex-start"><button type="submit">儲存</button><button type="button" class="secondary" onclick="closeM('tradeModal')">取消</button></div>
+  </form>
+</div></div>
+
+<div class="modal" id="divModal"><div class="mc">
+  <h3 id="divTitle">新增配息紀錄</h3>
+  <form onsubmit="saveDiv(event)" style="margin-top:12px">
+    <input type="hidden" id="d_id">
+    <input type="hidden" id="d_symbol">
+    <div class="fg"><label>標的</label><div class="lock" id="d_symLabel"></div></div>
+    <div class="fg"><label>除息日</label><input type="date" id="d_ex" required></div>
+    <div class="fg"><label>發放日 (選填)</label><input type="date" id="d_pay"></div>
+    <div class="fg"><label>每股配息 (原幣別)</label><input type="number" step="0.0001" min="0" id="d_per"></div>
+    <div class="fg"><label>實領金額 TWD (入帳後再填，未入帳留空)</label><input type="number" step="1" min="0" id="d_recv"></div>
+    <div class="row" style="justify-content:flex-start"><button type="submit">儲存</button><button type="button" class="secondary" onclick="closeM('divModal')">取消</button></div>
+  </form>
+</div></div>
 
 <script>
-const PROXY = 'https://corsproxy.io/?';
-let userPortfolio = load();
-let activeSymbol = null, chartInstance = null, chartToken = 0;
-const memCache = {}; // symbol -> {timestamps, closes}
+const PROXIES=[u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://corsproxy.org/?${encodeURIComponent(u)}`];
+const SYM_RE=/^[A-Z0-9.\-=^]{1,15}$/,DATE_RE=/^\d{4}-\d{2}-\d{2}$/;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let _n=0;const nid=()=>Date.now()*1000+(_n++%1000);
+const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
+const ymd=ts=>new Date(ts*1000).toISOString().slice(0,10);
+const cmp=(a,b)=>a.date.localeCompare(b.date)||(a.type===b.type?0:a.type==='BUY'?-1:1)||a.id-b.id;
+const money=(a,c)=>c==='USD'?'US$'+a.toFixed(2):'$'+Math.round(a).toLocaleString();
+const sg=n=>(n>=0?'+':'−')+'$'+Math.abs(Math.round(n)).toLocaleString();
+const fmt=n=>(+n.toFixed(3)).toLocaleString();
 
-function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem('user_portfolio'));
-    if (d && Array.isArray(d.trades)) return { trades: d.trades, prices: d.prices || {}, fx: d.fx || 0 };
-  } catch (e) {}
-  return { trades: [], prices: {}, fx: 0 };
+// 持股、成本、已實現損益：全部由買賣紀錄算出 (移動平均成本)；before 有值時只算該日期之前的交易
+function pos(D,sym,before){
+  let sh=0,cost=0,real=0;
+  D.trades.filter(t=>t.symbol===sym&&(!before||t.date<before)).sort(cmp).forEach(t=>{
+    if(t.type==='BUY'){sh+=t.shares;cost+=t.shares*t.price+t.fee}
+    else{const avg=sh>0?cost/sh:0;real+=(t.price-avg)*t.shares-t.fee;sh=Math.max(0,sh-t.shares);cost=sh*avg}
+  });
+  return{shares:sh,cost,real};
 }
-function save() { try { localStorage.setItem('user_portfolio', JSON.stringify(userPortfolio)); } catch (e) {} }
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-function quote(sym) { // 相容舊格式 (純數字價格)
-  const q = userPortfolio.prices[sym];
-  if (q && typeof q === 'object') return q;
-  return { price: Number(q) || 0, currency: 'TWD', div12m: 0 };
-}
+function oversold(trades,sym){let sh=0;for(const t of trades.filter(t=>t.symbol===sym).sort(cmp)){sh+=t.type==='BUY'?t.shares:-t.shares;if(sh<-1e-9)return true}return false}
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('formDate').valueAsDate = new Date();
-  userPortfolio.trades.length ? fetchAllPrices() : renderUI();
-});
+// 驗證並整理資料 (載入與匯入共用)，同時把舊版資料轉成新格式；格式不對回傳 null
+function normalize(d){
+  if(!d||typeof d!=='object'||Array.isArray(d))return null;
+  const num=x=>Number.isFinite(+x)?+x:NaN;
+  const D={symbols:{},trades:[],divs:[],prices:{},fx:+d.fx||0,lastUpdate:d.lastUpdate||'',lastBackup:d.lastBackup||''};
+  if(d.symbols!=null&&(typeof d.symbols!=='object'||Array.isArray(d.symbols)))return null;
+  if((d.trades!=null&&!Array.isArray(d.trades))||(d.divs!=null&&!Array.isArray(d.divs)))return null;
+  Object.keys(d.symbols||{}).forEach(s=>{if(SYM_RE.test(s))D.symbols[s]=1});
+  (d.trades||[]).forEach(t=>{
+    const s=String(t&&t.symbol||'').toUpperCase(),n=num(t&&t.shares);
+    if(!t||!SYM_RE.test(s)||!DATE_RE.test(t.date)||!(n>=0))return;
+    D.symbols[s]=1;
+    if(t.type==='DIVIDEND')D.divs.push({id:nid(),symbol:s,exDate:t.date,payDate:t.date,perShare:0,received:n}); // 舊版股息紀錄
+    else if(t.type==='BUY'||t.type==='SELL')D.trades.push({id:nid(),symbol:s,type:t.type,date:t.date,shares:n,price:num(t.price)||0,fee:num(t.fee)||0});
+  });
+  (d.divs||[]).forEach(v=>{
+    const s=String(v&&v.symbol||'').toUpperCase();
+    if(!v||!SYM_RE.test(s)||!DATE_RE.test(v.exDate))return;
+    const rv=v.received===null||v.received===undefined||v.received===''?null:num(v.received);
+    D.symbols[s]=1;
+    D.divs.push({id:nid(),symbol:s,exDate:v.exDate,payDate:DATE_RE.test(v.payDate)?v.payDate:'',perShare:num(v.perShare)||0,received:rv>=0?rv:null});
+  });
+  if(d.prices&&typeof d.prices==='object')Object.keys(d.prices).forEach(s=>{
+    if(!SYM_RE.test(s))return;const q=d.prices[s];
+    D.prices[s]=q&&typeof q==='object'?{price:+q.price||0,currency:q.currency==='USD'?'USD':'TWD',div12m:+q.div12m||0}:{price:+q||0,currency:'TWD',div12m:0};
+  });
+  // 舊版 (先設定股數的版本)：把「設定股數 − 交易算出的股數」補成一筆起始買入
+  Object.keys(d.symbols||{}).forEach(s=>{
+    const o=d.symbols[s];if(!SYM_RE.test(s)||!o||typeof o!=='object')return;
+    const diff=(+o.shares||0)-pos(D,s).shares;
+    if(diff>0){const first=D.trades.filter(t=>t.symbol===s).map(t=>t.date).sort()[0]||today();
+      D.trades.push({id:nid(),symbol:s,type:'BUY',date:first,shares:diff,price:+o.avgCost||0,fee:0})}
+  });
+  return D;
+}
+function load(){try{const r=localStorage.getItem('user_portfolio');if(r){const n=normalize(JSON.parse(r));if(n)return n}}catch(e){}return normalize({})}
+function save(){try{localStorage.setItem('user_portfolio',JSON.stringify(P))}catch(e){}}
 
-// 抓 Yahoo 資料：一次取 1 年日K + 配息；台股自動試 .TW 再試 .TWO
-async function fetchStockData(symbol) {
-  const isTW = /^\d+[A-Za-z]?$/.test(symbol);
-  const suffixes = isTW ? ['.TW', '.TWO'] : [''];
-  for (const suffix of suffixes) {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol + suffix)}?interval=1d&range=1y&events=div`;
-    try {
-      const res = await fetch(PROXY + encodeURIComponent(url));
-      const data = await res.json();
-      const r = data.chart?.result?.[0];
-      if (!r?.meta) continue;
-      const divs = Object.values(r.events?.dividends || {});
-      const cutoff = Date.now() / 1000 - 365 * 86400;
-      const div12m = divs.filter(d => d.date >= cutoff).reduce((s, d) => s + d.amount, 0);
-      return {
-        price: r.meta.regularMarketPrice || r.meta.chartPreviousClose,
-        currency: r.meta.currency || (isTW ? 'TWD' : 'USD'),
-        div12m,
-        timestamps: r.timestamp || [],
-        closes: r.indicators?.quote?.[0]?.close || []
-      };
-    } catch (e) { console.warn(`${symbol}${suffix} 抓取失敗`, e); }
+let P=load(),active=null,chartInstance=null,chartToken=0;
+const memCache={};
+const quote=s=>P.prices[s]||{price:0,currency:'TWD',div12m:0};
+const toTWD=(a,c)=>c==='USD'?a*(P.fx||0):a;
+
+// 網路：每個代理最多等 8 秒，失敗自動換下一個
+async function fetchJSON(url){
+  for(const f of PROXIES){
+    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),8000);
+    try{const r=await fetch(f(url),{signal:ac.signal});const d=await r.json().catch(()=>null);if(d&&d.chart)return d}
+    catch(e){}finally{clearTimeout(t)}
   }
   return null;
 }
-
-async function fetchAllPrices() {
-  const btn = document.getElementById('refreshBtn'), banner = document.getElementById('banner');
-  btn.innerText = '⏳ 抓取中...'; btn.disabled = true; banner.style.display = 'none';
-
-  const symbols = [...new Set(userPortfolio.trades.map(t => t.symbol))];
-  const results = await Promise.all(symbols.map(s => fetchStockData(s)));
-  const failed = [];
-  symbols.forEach((s, i) => {
-    const d = results[i];
-    if (d && d.price) {
-      userPortfolio.prices[s] = { price: d.price, currency: d.currency, div12m: d.div12m };
-      memCache[s] = { timestamps: d.timestamps, closes: d.closes };
-    } else failed.push(s);
-  });
-
-  const needFx = symbols.some(s => quote(s).currency === 'USD');
-  if (needFx) {
-    const fx = await fetchStockData('USDTWD=X');
-    if (fx && fx.price) userPortfolio.fx = fx.price;
-    else failed.push('USDTWD 匯率');
+async function fetchStockData(sym){
+  const tw=/^\d+[A-Za-z]?$/.test(sym);
+  for(const sf of tw?['.TW','.TWO']:['']){
+    const d=await fetchJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym+sf)}?interval=1d&range=1y&events=div`);
+    const r=d?.chart?.result?.[0];
+    if(!r?.meta)continue;
+    const divs=Object.values(r.events?.dividends||{}),cut=Date.now()/1000-365*86400;
+    return{price:r.meta.regularMarketPrice||r.meta.chartPreviousClose,currency:r.meta.currency==='USD'?'USD':'TWD',
+      div12m:divs.filter(x=>x.date>=cut).reduce((s,x)=>s+x.amount,0),
+      divList:divs.map(x=>({ex:ymd(x.date),amount:x.amount})),
+      timestamps:r.timestamp||[],closes:r.indicators?.quote?.[0]?.close||[]};
   }
-
-  save();
-  btn.innerText = '🔄 更新即時股價'; btn.disabled = false;
-  if (failed.length) {
-    banner.innerText = `⚠️ 以下項目更新失敗，顯示的是舊資料或未取得：${failed.join(', ')}`;
-    banner.style.display = 'block';
-  }
-  renderUI();
+  return null;
+}
+// only：只更新指定的標的 (新增標的時用)；不傳則更新全部
+async function fetchAll(only){
+  const btn=$('refreshBtn'),bn=$('banner');
+  btn.textContent='⏳ 抓取中...';btn.disabled=true;bn.style.display='none';
+  const all=Object.keys(P.symbols),syms=Array.isArray(only)?only:all;
+  const res=await Promise.all(syms.map(s=>fetchStockData(s))),fail=[];
+  syms.forEach((s,i)=>{const d=res[i];if(d&&d.price){P.prices[s]={price:d.price,currency:d.currency,div12m:d.div12m};memCache[s]=d}else fail.push(s)});
+  const needFx=syms.some(s=>quote(s).currency==='USD')||(!P.fx&&all.some(s=>quote(s).currency==='USD'));
+  if(needFx){const f=await fetchStockData('USDTWD=X');if(f&&f.price)P.fx=f.price;else fail.push('USDTWD 匯率')}
+  if(fail.length<syms.length)P.lastUpdate=new Date().toLocaleString('zh-TW',{hour12:false});
+  save();btn.textContent='🔄 更新股價';btn.disabled=false;
+  if(fail.length){bn.textContent='⚠️ 以下項目更新失敗，顯示舊資料或未取得：'+fail.join(', ')+'（若代碼打錯，點卡片進去可刪除）';bn.style.display='block'}
+  render();if($('detailModal').style.display==='flex')openDetail(active);
 }
 
-function toTWD(amount, currency) {
-  if (currency === 'USD') return amount * (userPortfolio.fx || 0);
-  return amount;
-}
-
-function computeHoldings() {
-  const holdings = {};
-  [...userPortfolio.trades].sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(t => {
-    const h = holdings[t.symbol] ||= { shares: 0, cost: 0, received: 0 };
-    const n = parseFloat(t.shares) || 0, p = parseFloat(t.price) || 0;
-    if (t.type === 'BUY') { h.shares += n; h.cost += n * p; }
-    else if (t.type === 'SELL') {
-      const avg = h.shares > 0 ? h.cost / h.shares : 0;
-      h.shares = Math.max(0, h.shares - n); h.cost = h.shares * avg;
-    } else if (t.type === 'DIVIDEND') h.received += n;
+function render(){
+  const list=$('stockList');list.innerHTML='';
+  const syms=Object.keys(P.symbols).sort(),yr=String(new Date().getFullYear());
+  let mv=0,cost=0,costP=0,mvP=0,real=0,ref=0,got=0,pend=0;
+  syms.forEach(s=>{
+    const q=quote(s),p=pos(P,s),cur=q.currency==='USD'?'US$':'$';
+    const v=toTWD(p.shares*q.price,q.currency),c=toTWD(p.cost,q.currency),pl=v-c;
+    mv+=v;cost+=c;real+=toTWD(p.real,q.currency);ref+=toTWD(p.shares*q.div12m,q.currency);
+    if(q.price){mvP+=v;costP+=c}
+    const avg=p.shares>0?p.cost/p.shares:0,showPL=q.price&&p.shares>0;
+    const empty=p.shares<=0&&!P.trades.some(t=>t.symbol===s);
+    const el=document.createElement('div');el.className='card';el.dataset.act='detail';el.dataset.sym=s;
+    el.innerHTML=`<div><div class="big">${esc(s)}<span class="badge">${q.currency}</span></div>
+      <div class="sub" style="margin-top:4px">${empty?'尚未持股｜點此記錄買入或查看走勢':`持股 ${fmt(p.shares)} 股｜均價 ${cur}${avg.toFixed(2)}`}</div></div>
+      <div class="r"><div class="big">$${Math.round(v).toLocaleString()}</div>
+      <div class="sub" style="margin-top:4px">市價 ${q.price?cur+q.price:'未取得'}${showPL?` <span class="${pl>=0?'up':'dn'}">${sg(pl)} (${(c>0?pl/c*100:0).toFixed(1)}%)</span>`:''}</div></div>`;
+    list.appendChild(el);
   });
-  return holdings;
-}
-
-function renderUI() {
-  const list = document.getElementById('stockList');
-  list.innerHTML = '';
-  const holdings = computeHoldings();
-  let total = 0, cashflow = 0, received = 0, shown = 0;
-
-  Object.entries(holdings).forEach(([sym, h]) => {
-    received += h.received;
-    if (h.shares <= 0 && h.received === 0) return;
-    shown++;
-    const q = quote(sym);
-    const mv = toTWD(h.shares * q.price, q.currency);
-    total += mv;
-    cashflow += toTWD(h.shares * q.div12m, q.currency);
-    const avg = h.shares > 0 ? h.cost / h.shares : 0;
-    const cur = q.currency === 'USD' ? 'US$' : '$';
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.onclick = () => openDetail(sym);
-    card.innerHTML = `
-      <div>
-        <div style="font-size:1.1rem;font-weight:bold">${esc(sym)}</div>
-        <div style="color:var(--sub);font-size:.85rem;margin-top:4px">持股: ${h.shares.toLocaleString()} 股 | 平均成本: ${cur}${avg.toFixed(2)}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:1.1rem;font-weight:bold">$${Math.round(mv).toLocaleString()}</div>
-        <div style="font-size:.85rem;color:var(--sub);margin-top:4px">市價: <span style="color:var(--accent)">${q.price ? cur + q.price : '未取得'}</span></div>
-      </div>`;
-    list.appendChild(card);
+  if(!syms.length)list.innerHTML='<div class="sub" style="text-align:center;padding:20px">還沒有標的，請點上方「＋ 追蹤標的」輸入股票代碼。</div>';
+  P.divs.forEach(d=>{
+    if(d.received!=null){if((d.payDate||d.exDate).slice(0,4)===yr)got+=d.received}
+    else pend+=toTWD(d.perShare*pos(P,d.symbol,d.exDate).shares,quote(d.symbol).currency);
   });
-
-  if (!shown) list.innerHTML = '<div style="color:var(--sub);text-align:center;padding:20px">尚無持股紀錄，請點擊上方按鈕新增交易。</div>';
-  document.getElementById('totalValue').innerText = `$${Math.round(total).toLocaleString()}`;
-  document.getElementById('totalCashflow').innerText = `$${Math.round(cashflow).toLocaleString()}`;
-  document.getElementById('totalReceived').innerText = `$${Math.round(received).toLocaleString()}`;
+  const un=mvP-costP;
+  $('sMV').textContent='$'+Math.round(mv).toLocaleString();
+  $('sCost').textContent='$'+Math.round(cost).toLocaleString();
+  $('sUn').textContent=costP>0?`${sg(un)} (${(un/costP*100).toFixed(1)}%)`:'-';
+  $('sUn').className='sv '+(un>=0?'up':'dn');
+  $('sReal').textContent=sg(real);$('sReal').className='sv '+(real>=0?'up':'dn');
+  $('sGot').textContent='$'+Math.round(got).toLocaleString();
+  $('sPend').textContent='$'+Math.round(pend).toLocaleString();
+  const rn=$('refNote');rn.style.display=ref>0?'block':'none';
+  rn.textContent=`去年配息參考（過去12個月每股配息 × 目前持股，稅前，僅供參考）：$${Math.round(ref).toLocaleString()}`;
+  $('updated').textContent=P.lastUpdate?'股價更新：'+P.lastUpdate:'';
+  const bk=$('bkBanner');
+  if(P.trades.length||P.divs.length){
+    const days=P.lastBackup?(Date.now()-new Date(P.lastBackup))/864e5:Infinity;
+    if(days>30){bk.textContent=P.lastBackup?`⚠️ 已超過 ${Math.floor(days)} 天沒有備份，建議按「匯出備份」`:'⚠️ 還沒有備份過，資料只存在這個瀏覽器，建議按「匯出備份」';bk.style.display='block'}
+    else bk.style.display='none';
+  }else bk.style.display='none';
 }
 
-function openDetail(symbol) {
-  activeSymbol = symbol;
-  document.getElementById('modalTitle').innerText = `${symbol} 詳細紀錄`;
-  const tbody = document.getElementById('tradeBody');
-  tbody.innerHTML = '';
-  userPortfolio.trades.filter(t => t.symbol === symbol)
-    .sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-      const tr = document.createElement('tr');
-      const typeName = t.type === 'BUY' ? '買入' : t.type === 'SELL' ? '賣出' : '股息';
-      tr.innerHTML = `<td>${esc(t.date)}</td><td>${typeName}</td><td>${esc(t.shares)}</td><td>${t.price ? esc(t.price) : '-'}</td>
-        <td><button class="danger" style="padding:2px 6px;font-size:.75rem" onclick="deleteTrade(${Number(t.id)})">刪除</button></td>`;
-      tbody.appendChild(tr);
-    });
-  document.getElementById('detailModal').style.display = 'flex';
-  renderChart(symbol);
+function openDetail(s){
+  active=s;const q=quote(s),p=pos(P,s);
+  $('modalTitle').textContent=s+' 詳細紀錄';
+  $('detailSum').textContent=`持股 ${fmt(p.shares)} 股｜已實現損益 ${sg(toTWD(p.real,q.currency))}`;
+  $('tradeBody').innerHTML=P.trades.filter(t=>t.symbol===s).sort(cmp).reverse().map(t=>
+    `<tr><td>${esc(t.date)}</td><td>${t.type==='BUY'?'買入':'賣出'}</td><td>${fmt(t.shares)}</td><td>${t.price}</td><td>${t.fee||'-'}</td>
+    <td class="nw"><button class="secondary sm" data-act="editTrade" data-id="${t.id}">編輯</button> <button class="danger sm" data-act="delTrade" data-id="${t.id}">刪除</button></td></tr>`
+  ).join('')||'<tr><td colspan="6" class="sub">尚無買賣紀錄，請按下方「＋ 買賣」</td></tr>';
+  $('divBody').innerHTML=P.divs.filter(d=>d.symbol===s).sort((a,b)=>b.exDate.localeCompare(a.exDate)).map(d=>{
+    const sh=pos(P,s,d.exDate).shares;
+    return`<tr><td>${esc(d.exDate)}</td><td>${esc(d.payDate||'-')}</td><td>${d.perShare||'-'}</td><td>${fmt(sh)}</td>
+    <td>${d.perShare?money(d.perShare*sh,q.currency):'-'}</td><td>${d.received==null?'待入帳':'$'+Math.round(d.received).toLocaleString()}</td>
+    <td class="nw"><button class="secondary sm" data-act="editDiv" data-id="${d.id}">編輯</button> <button class="danger sm" data-act="delDiv" data-id="${d.id}">刪除</button></td></tr>`;
+  }).join('')||'<tr><td colspan="7" class="sub">尚無配息紀錄</td></tr>';
+  openM('detailModal');renderChart(s);
+}
+async function renderChart(s){
+  const token=++chartToken;let c=memCache[s];
+  if(!c){const d=await fetchStockData(s);if(d)c=memCache[s]=d}
+  if(token!==chartToken)return;
+  if(chartInstance){chartInstance.destroy();chartInstance=null}
+  const ts=c?.timestamps||[],cl=c?.closes||[],cut=(ts.length?ts[ts.length-1]:Date.now()/1000)-92*86400,labels=[],prices=[];
+  ts.forEach((t,i)=>{if(t>=cut&&cl[i]!=null){const d=new Date(t*1000);labels.push(`${d.getMonth()+1}/${d.getDate()}`);prices.push(cl[i])}});
+  chartInstance=new Chart($('priceChart').getContext('2d'),{type:'line',
+    data:{labels:labels.length?labels:['無歷史數據'],datasets:[{label:s+' 近3個月收盤價',data:prices,borderColor:'#4caf50',borderWidth:2,pointRadius:0,tension:.1}]},
+    options:{responsive:true,maintainAspectRatio:false}});
 }
 
-async function renderChart(symbol) {
-  const token = ++chartToken;
-  let c = memCache[symbol];
-  if (!c) {
-    const d = await fetchStockData(symbol);
-    if (d) c = memCache[symbol] = { timestamps: d.timestamps, closes: d.closes };
-  }
-  if (token !== chartToken) return; // 已有較新的請求，放棄這次
-  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+const openM=id=>{$(id).style.display='flex'};
+function closeM(id){if(id==='detailModal')chartToken++;$(id).style.display='none'}
 
-  const timestamps = c?.timestamps || [];
-  const closes = c?.closes || [];
-  
-  // 以資料陣列中最新一筆時間戳往前推 92 天，避免因系統當前時間時差、休市或週末過濾掉最新股價
-  const lastTs = timestamps.length ? timestamps[timestamps.length - 1] : Date.now() / 1000;
-  const cutoff = lastTs - 92 * 86400;
-
-  const labels = [], prices = [];
-  timestamps.forEach((ts, i) => {
-    if (ts >= cutoff && closes[i] != null) {
-      const d = new Date(ts * 1000);
-      labels.push(`${d.getMonth() + 1}/${d.getDate()}`);
-      prices.push(closes[i]);
-    }
-  });
-
-  chartInstance = new Chart(document.getElementById('priceChart').getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: labels.length ? labels : ['無歷史數據'],
-      datasets: [{ label: `${symbol} 近3個月收盤價`, data: prices, borderColor: '#4caf50', borderWidth: 2, pointRadius: 0, tension: 0.1 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
-}
-
-function closeModal() {
-  chartToken++;
-  document.getElementById('detailModal').style.display = 'none';
-}
-function openTradeForm(sym = '') {
-  document.getElementById('formSymbol').value = sym || '';
-  document.getElementById('tradeModal').style.display = 'flex';
-}
-function closeTradeModal() { document.getElementById('tradeModal').style.display = 'none'; }
-
-function saveTrade(e) {
+// 新增追蹤標的：只輸入代碼，確定後立刻出現卡片並抓價
+function addSymbol(){$('s_symbol').value='';openM('symModal');setTimeout(()=>$('s_symbol').focus(),50)}
+function saveSymbol(e){
   e.preventDefault();
-  userPortfolio.trades.push({
-    id: Date.now(),
-    symbol: document.getElementById('formSymbol').value.trim().toUpperCase(),
-    type: document.getElementById('formType').value,
-    date: document.getElementById('formDate').value,
-    shares: parseFloat(document.getElementById('formShares').value),
-    price: parseFloat(document.getElementById('formPrice').value) || 0
-  });
-  save();
-  e.target.reset();
-  document.getElementById('formDate').valueAsDate = new Date();
-  document.getElementById('formPrice').value = 0;
-  closeTradeModal(); closeModal();
-  fetchAllPrices();
+  const s=$('s_symbol').value.trim().toUpperCase().replace(/\s+/g,'');
+  if(!SYM_RE.test(s))return alert('代碼格式不正確，請只輸入英數字，例如 0050、00720B、VOO');
+  closeM('symModal');
+  if(P.symbols[s]){alert(s+' 已經在清單中');openDetail(s);return}
+  P.symbols[s]=1;save();render();fetchAll([s]);
 }
 
-function deleteTrade(id) {
-  userPortfolio.trades = userPortfolio.trades.filter(t => t.id !== id);
-  save(); openDetail(activeSymbol); renderUI();
+// 買賣／配息表單：標的由卡片帶入並鎖定，不能手動輸入或更換
+function openTradeForm(x){
+  const t=typeof x==='number'?P.trades.find(v=>v.id===x):null;
+  const sym=t?t.symbol:x;
+  if(typeof sym!=='string'||!P.symbols[sym])return;
+  $('tradeTitle').textContent=t?'編輯買賣紀錄':'新增買賣紀錄';
+  $('f_id').value=t?t.id:'';$('f_symbol').value=sym;$('f_symLabel').textContent='🔒 '+sym;
+  $('f_type').value=t?t.type:'BUY';$('f_date').value=t?t.date:today();
+  $('f_shares').value=t?t.shares:'';$('f_price').value=t?t.price:'';$('f_fee').value=t&&t.fee?t.fee:'';
+  openM('tradeModal');
 }
-function deleteCurrentStock() {
-  if (confirm(`確定要刪除 ${activeSymbol} 的所有交易紀錄嗎？`)) {
-    userPortfolio.trades = userPortfolio.trades.filter(t => t.symbol !== activeSymbol);
-    save(); closeModal(); renderUI();
-  }
+function openDivForm(x){
+  const d=typeof x==='number'?P.divs.find(v=>v.id===x):null;
+  const sym=d?d.symbol:x;
+  if(typeof sym!=='string'||!P.symbols[sym])return;
+  $('divTitle').textContent=d?'編輯配息紀錄':'新增配息紀錄';
+  $('d_id').value=d?d.id:'';$('d_symbol').value=sym;$('d_symLabel').textContent='🔒 '+sym;
+  $('d_ex').value=d?d.exDate:'';$('d_pay').value=d?d.payDate:'';
+  $('d_per').value=d&&d.perShare?d.perShare:'';$('d_recv').value=d&&d.received!=null?d.received:'';
+  openM('divModal');
+}
+function afterChange(){render();if($('detailModal').style.display==='flex')openDetail(active)}
+function saveTrade(e){
+  e.preventDefault();
+  const s=$('f_symbol').value;
+  if(!P.symbols[s])return alert('找不到這個標的，請重新從卡片進入');
+  const t={id:+$('f_id').value||nid(),symbol:s,type:$('f_type').value,date:$('f_date').value,
+    shares:+$('f_shares').value,price:+$('f_price').value||0,fee:+$('f_fee').value||0};
+  if(!(t.shares>0))return alert('股數必須大於 0');
+  const rest=P.trades.filter(x=>x.id!==t.id);
+  if(oversold([...rest,t],s))return alert('賣出股數超過當時的持股，請檢查日期與股數。');
+  P.trades=[...rest,t];save();closeM('tradeModal');afterChange();
+}
+function saveDiv(e){
+  e.preventDefault();
+  const s=$('d_symbol').value;
+  if(!P.symbols[s])return alert('找不到這個標的，請重新從卡片進入');
+  const rv=$('d_recv').value,per=+$('d_per').value||0;
+  if(!(per>0)&&rv==='')return alert('請填每股配息，或已入帳的實領金額');
+  const d={id:+$('d_id').value||nid(),symbol:s,exDate:$('d_ex').value,payDate:$('d_pay').value,perShare:per,received:rv===''?null:+rv};
+  P.divs=[...P.divs.filter(v=>v.id!==d.id),d];save();closeM('divModal');afterChange();
+}
+function delTrade(id){
+  const t=P.trades.find(v=>v.id===id);if(!t||!confirm('確定刪除這筆買賣紀錄？'))return;
+  const rest=P.trades.filter(v=>v.id!==id);
+  if(oversold(rest,t.symbol))return alert('刪除後會造成賣出股數超過持股，請先處理相關的賣出紀錄。');
+  P.trades=rest;save();openDetail(t.symbol);render();
+}
+function delDiv(id){
+  const d=P.divs.find(v=>v.id===id);if(!d||!confirm('確定刪除這筆配息紀錄？'))return;
+  P.divs=P.divs.filter(v=>v.id!==id);save();openDetail(d.symbol);render();
+}
+function delSymbol(){
+  if(!confirm(`確定刪除 ${active} 的追蹤與所有買賣、配息紀錄嗎？`))return;
+  P.trades=P.trades.filter(t=>t.symbol!==active);P.divs=P.divs.filter(d=>d.symbol!==active);
+  delete P.symbols[active];delete P.prices[active];save();closeM('detailModal');render();
+}
+// 從 Yahoo 帶入「你買入之後」已除息的配息 (每股金額請與公告核對)
+async function importDivs(s){
+  let c=memCache[s];
+  if(!c){const d=await fetchStockData(s);if(!d)return alert('抓取失敗，請稍後再試');c=memCache[s]=d}
+  if(!P.trades.some(t=>t.symbol===s&&t.type==='BUY'))return alert('這檔還沒有買入紀錄');
+  const add=(c.divList||[]).filter(d=>!P.divs.some(v=>v.symbol===s&&v.exDate===d.ex)&&pos(P,s,d.ex).shares>0);
+  if(!add.length)return alert('沒有可帶入的新配息');
+  if(!confirm(`將帶入 ${add.length} 筆除息紀錄。每股金額來自 Yahoo，請與公告核對；實領金額入帳後再自己填。`))return;
+  add.forEach(d=>P.divs.push({id:nid(),symbol:s,exDate:d.ex,payDate:'',perShare:d.amount,received:null}));
+  save();openDetail(s);render();
 }
 
-function exportData() {
-  const blob = new Blob([JSON.stringify(userPortfolio)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `portfolio_backup_${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+function exportData(){
+  P.lastBackup=today();save();render();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(P)],{type:'application/json'}));
+  a.download=`portfolio_backup_${today()}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-
-function handleFileSelect(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (!data || !Array.isArray(data.trades)) throw new Error('format');
-      if (!confirm('匯入會覆蓋目前所有資料，確定繼續嗎？')) return;
-      userPortfolio = { trades: data.trades, prices: data.prices || {}, fx: data.fx || 0 };
-      save(); fetchAllPrices();
-      alert('匯入備份成功！');
-    } catch (err) {
-      alert('⚠️ 匯入失敗：請確認檔案為本系統匯出的 JSON 備份檔。');
-    }
+function handleFileSelect(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    let n=null;try{n=normalize(JSON.parse(e.target.result))}catch(x){}
+    if(!n||(!n.trades.length&&!n.divs.length&&!Object.keys(n.symbols).length)){alert('⚠️ 匯入失敗：檔案格式不正確，原有資料沒有被改動。');return}
+    if(!confirm('匯入會覆蓋目前所有資料，確定繼續嗎？'))return;
+    P=n;save();render();fetchAll();alert('匯入備份成功！');
   };
-  reader.readAsText(file);
-  event.target.value = ''; // 允許再次選同一個檔案
+  r.readAsText(f);ev.target.value='';
 }
+
+document.addEventListener('click',e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const id=+el.dataset.id,m={detail:()=>openDetail(el.dataset.sym),editTrade:()=>openTradeForm(id),delTrade:()=>delTrade(id),editDiv:()=>openDivForm(id),delDiv:()=>delDiv(id)};
+  m[el.dataset.act]?.();
+});
+document.addEventListener('DOMContentLoaded',()=>{save();render();if(Object.keys(P.symbols).length)fetchAll()});
 </script>
 </body>
 </html>
