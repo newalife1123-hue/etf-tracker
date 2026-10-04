@@ -26,13 +26,19 @@ button.sm{padding:3px 8px;font-size:.75rem}
 .card{background:var(--card);border-radius:10px;padding:16px;border:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px}
 .card:hover{border-color:var(--accent)}
 .r{text-align:right}.big{font-size:1.1rem;font-weight:bold}
-.badge{background:#333;padding:2px 6px;border-radius:4px;font-size:.7rem;margin-left:6px}
+.nm{color:var(--sub);font-weight:normal;font-size:.9rem}
+.badge{background:#333;padding:2px 6px;border-radius:4px;font-size:.7rem;margin-left:6px;white-space:nowrap}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);justify-content:center;align-items:center;padding:12px;z-index:100}
 .mc{background:var(--card);border-radius:12px;width:100%;max-width:640px;max-height:92vh;overflow-y:auto;padding:18px;border:1px solid var(--border)}
 .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .fg{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
 input,select{background:#2a2a2a;border:1px solid var(--border);color:#fff;padding:8px;border-radius:6px}
 .lock{background:#262626;border:1px solid var(--border);padding:8px;border-radius:6px;font-weight:bold}
+.results{display:none;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px}
+.res{padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.res:last-child{border-bottom:none}
+.res:hover{background:#2a2a2a}
+.chosen{display:none;background:#1f3322;border:1px solid var(--accent);border-radius:6px;padding:8px;margin-top:8px;font-size:.9rem}
 .scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;margin-top:8px;font-size:.85rem}
 th,td{border-bottom:1px solid var(--border);padding:6px;text-align:left}
@@ -76,9 +82,12 @@ th,td{border-bottom:1px solid var(--border);padding:6px;text-align:left}
 
 <div class="modal" id="symModal"><div class="mc">
   <h3>新增追蹤標的</h3>
-  <form onsubmit="saveSymbol(event)" style="margin-top:12px">
-    <div class="fg"><label>股票/ETF 代碼（上市如 0050、上櫃如 00720B、美股如 VOO）</label>
-      <input id="s_symbol" required placeholder="例如 0050" autocapitalize="characters" autocomplete="off"></div>
+  <form onsubmit="saveSymbol(event)" style="margin-top:12px" autocomplete="off">
+    <div class="fg"><label>輸入部分代碼或名稱，點選要加入的標的</label>
+      <input id="s_symbol" placeholder="例如 005、元大、VOO" autocapitalize="characters" autocomplete="off" oninput="onSymInput()"></div>
+    <div class="results" id="s_results"></div>
+    <div class="chosen" id="s_chosen"></div>
+    <div class="sub" id="s_status" style="margin:8px 0 12px"></div>
     <div class="row" style="justify-content:flex-start"><button type="submit">加入</button><button type="button" class="secondary" onclick="closeM('symModal')">取消</button></div>
   </form>
 </div></div>
@@ -157,7 +166,7 @@ function oversold(trades,sym){let sh=0;for(const t of trades.filter(t=>t.symbol=
 function normalize(d){
   if(!d||typeof d!=='object'||Array.isArray(d))return null;
   const num=x=>Number.isFinite(+x)?+x:NaN;
-  const D={symbols:{},trades:[],divs:[],prices:{},fx:+d.fx||0,lastUpdate:d.lastUpdate||'',lastBackup:d.lastBackup||''};
+  const D={symbols:{},names:{},trades:[],divs:[],prices:{},fx:+d.fx||0,lastUpdate:d.lastUpdate||'',lastBackup:d.lastBackup||''};
   if(d.symbols!=null&&(typeof d.symbols!=='object'||Array.isArray(d.symbols)))return null;
   if((d.trades!=null&&!Array.isArray(d.trades))||(d.divs!=null&&!Array.isArray(d.divs)))return null;
   Object.keys(d.symbols||{}).forEach(s=>{if(SYM_RE.test(s))D.symbols[s]=1});
@@ -174,6 +183,9 @@ function normalize(d){
     const rv=v.received===null||v.received===undefined||v.received===''?null:num(v.received);
     D.symbols[s]=1;
     D.divs.push({id:nid(),symbol:s,exDate:v.exDate,payDate:DATE_RE.test(v.payDate)?v.payDate:'',perShare:num(v.perShare)||0,received:rv>=0?rv:null});
+  });
+  if(d.names&&typeof d.names==='object'&&!Array.isArray(d.names))Object.keys(d.names).forEach(s=>{
+    if(SYM_RE.test(s)&&typeof d.names[s]==='string')D.names[s]=d.names[s].slice(0,60);
   });
   if(d.prices&&typeof d.prices==='object')Object.keys(d.prices).forEach(s=>{
     if(!SYM_RE.test(s))return;const q=d.prices[s];
@@ -195,16 +207,18 @@ let P=load(),active=null,chartInstance=null,chartToken=0;
 const memCache={};
 const quote=s=>P.prices[s]||{price:0,currency:'TWD',div12m:0};
 const toTWD=(a,c)=>c==='USD'?a*(P.fx||0):a;
+const label=s=>s+(P.names[s]?' '+P.names[s]:'');
 
-// 網路：每個代理最多等 8 秒，失敗自動換下一個
-async function fetchJSON(url){
+// 網路：每個代理最多等一段時間，失敗自動換下一個；ok() 判斷回傳內容是否可用
+async function proxyFetch(url,ok,ms){
   for(const f of PROXIES){
-    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),8000);
-    try{const r=await fetch(f(url),{signal:ac.signal});const d=await r.json().catch(()=>null);if(d&&d.chart)return d}
+    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),ms);
+    try{const r=await fetch(f(url),{signal:ac.signal});const d=await r.json().catch(()=>null);if(ok(d))return d}
     catch(e){}finally{clearTimeout(t)}
   }
   return null;
 }
+const fetchJSON=url=>proxyFetch(url,d=>d&&d.chart,8000);
 async function fetchStockData(sym){
   const tw=/^\d+[A-Za-z]?$/.test(sym);
   for(const sf of tw?['.TW','.TWO']:['']){
@@ -213,6 +227,7 @@ async function fetchStockData(sym){
     if(!r?.meta)continue;
     const divs=Object.values(r.events?.dividends||{}),cut=Date.now()/1000-365*86400;
     return{price:r.meta.regularMarketPrice||r.meta.chartPreviousClose,currency:r.meta.currency==='USD'?'USD':'TWD',
+      name:r.meta.shortName||r.meta.longName||'',
       div12m:divs.filter(x=>x.date>=cut).reduce((s,x)=>s+x.amount,0),
       divList:divs.map(x=>({ex:ymd(x.date),amount:x.amount})),
       timestamps:r.timestamp||[],closes:r.indicators?.quote?.[0]?.close||[]};
@@ -225,13 +240,124 @@ async function fetchAll(only){
   btn.textContent='⏳ 抓取中...';btn.disabled=true;bn.style.display='none';
   const all=Object.keys(P.symbols),syms=Array.isArray(only)?only:all;
   const res=await Promise.all(syms.map(s=>fetchStockData(s))),fail=[];
-  syms.forEach((s,i)=>{const d=res[i];if(d&&d.price){P.prices[s]={price:d.price,currency:d.currency,div12m:d.div12m};memCache[s]=d}else fail.push(s)});
+  syms.forEach((s,i)=>{const d=res[i];if(d&&d.price){
+    P.prices[s]={price:d.price,currency:d.currency,div12m:d.div12m};memCache[s]=d;
+    if(d.name&&!P.names[s])P.names[s]=d.name.slice(0,60);
+  }else fail.push(s)});
   const needFx=syms.some(s=>quote(s).currency==='USD')||(!P.fx&&all.some(s=>quote(s).currency==='USD'));
   if(needFx){const f=await fetchStockData('USDTWD=X');if(f&&f.price)P.fx=f.price;else fail.push('USDTWD 匯率')}
   if(fail.length<syms.length)P.lastUpdate=new Date().toLocaleString('zh-TW',{hour12:false});
-  save();btn.textContent='🔄 更新股價';btn.disabled=false;
+  fillNames();save();btn.textContent='🔄 更新股價';btn.disabled=false;
   if(fail.length){bn.textContent='⚠️ 以下項目更新失敗，顯示舊資料或未取得：'+fail.join(', ')+'（若代碼打錯，點卡片進去可刪除）';bn.style.display='block'}
   render();if($('detailModal').style.display==='flex')openDetail(active);
+}
+
+// ===== 股票清單（上市＋上櫃的代碼與中文名稱），存在瀏覽器，每 7 天更新一次 =====
+let DIR=[],dirState='idle';
+function readDirCache(){
+  try{const d=JSON.parse(localStorage.getItem('stock_dir'));
+    if(d&&Array.isArray(d.list)&&d.list.length){DIR=d.list.filter(x=>x&&typeof x.c==='string'&&typeof x.n==='string');return+d.ts||0}}catch(e){}
+  return 0;
+}
+async function ensureDir(force){
+  const ts=readDirCache();
+  if(DIR.length)dirState='ok';
+  if(DIR.length&&!force&&Date.now()-ts<7*864e5){fillNames();return}
+  if(!DIR.length)dirState='loading';
+  refreshSearch();
+  const isArr=d=>Array.isArray(d)&&d.length>0;
+  const [a,b]=await Promise.all([
+    proxyFetch('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',isArr,12000),
+    proxyFetch('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',isArr,12000)]);
+  const pick=(o,ks)=>{for(const k of ks)if(o&&o[k]!=null&&String(o[k]).trim())return String(o[k]).trim();return''};
+  const seen=new Set(),list=[];
+  const add=(arr,codeKeys,nameKeys,m)=>(arr||[]).forEach(o=>{
+    const c=pick(o,codeKeys).toUpperCase(),n=pick(o,nameKeys);
+    if(SYM_RE.test(c)&&n&&!seen.has(c)){seen.add(c);list.push({c,n:n.slice(0,40),m})}
+  });
+  add(a,['Code','證券代號'],['Name','證券名稱'],'上市');
+  add(b,['SecuritiesCompanyCode','Code','代號'],['CompanyName','Name','名稱'],'上櫃');
+  if(list.length){
+    list.sort((x,y)=>x.c.localeCompare(y.c));DIR=list;dirState='ok';
+    try{localStorage.setItem('stock_dir',JSON.stringify({ts:Date.now(),list}))}catch(e){}
+  }else if(!DIR.length)dirState='fail';
+  fillNames();refreshSearch();
+}
+// 已追蹤的台股標的，自動補上中文名稱
+function fillNames(){
+  if(!DIR.length)return;
+  const map=new Map(DIR.map(d=>[d.c,d.n]));let ch=false;
+  Object.keys(P.symbols).forEach(s=>{const n=map.get(s);if(n&&P.names[s]!==n){P.names[s]=n;ch=true}});
+  if(ch){save();render()}
+}
+
+// ===== 新增標的：輸入部分代碼或名稱 → 搜尋 → 點選 =====
+let RES=[],SEL=null,srTok=0,srTimer=null;
+function localSearch(q){
+  const u=q.toUpperCase(),t1=[],t2=[],t3=[];
+  DIR.forEach(d=>{
+    if(d.c.startsWith(u))t1.push(d);
+    else if(d.c.includes(u))t2.push(d);
+    else if(d.n.toUpperCase().includes(u))t3.push(d);
+  });
+  return[...t1,...t2,...t3].slice(0,30);
+}
+async function yahooSearch(q,tok){
+  const d=await proxyFetch(`https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`,x=>x&&Array.isArray(x.quotes),8000);
+  if(tok!==srTok||!d)return;
+  const have=new Set(RES.map(r=>r.c));
+  d.quotes.filter(x=>x&&x.symbol&&(x.quoteType==='EQUITY'||x.quoteType==='ETF')).forEach(x=>{
+    let c=String(x.symbol).toUpperCase(),m=x.exchDisp||'';
+    if(/\.TWO?$/.test(c)){m=/\.TWO$/.test(c)?'上櫃':'上市';c=c.replace(/\.TWO?$/,'')}
+    if(!SYM_RE.test(c)||have.has(c))return;
+    have.add(c);RES.push({c,n:String(x.shortname||x.longname||'').slice(0,40),m:String(m).slice(0,12)});
+  });
+  drawRes(q);
+}
+function curQuery(){return $('s_symbol').value.trim().toUpperCase().replace(/\s+/g,'')}
+function onSymInput(){
+  SEL=null;$('s_chosen').style.display='none';
+  const q=curQuery(),tok=++srTok;clearTimeout(srTimer);
+  RES=q?localSearch(q):[];
+  drawRes(q);
+  if(q.length>=2&&/[A-Z]/.test(q))srTimer=setTimeout(()=>yahooSearch(q,tok),500); // 英文代碼 (美股等) 另外用 Yahoo 搜尋
+}
+function refreshSearch(){if($('symModal').style.display==='flex'&&!SEL)onSymInput()}
+function drawRes(q){
+  const box=$('s_results'),st=$('s_status');
+  box.innerHTML=RES.map((r,i)=>`<div class="res" data-act="pick" data-i="${i}"><span><b>${esc(r.c)}</b> <span class="nm">${esc(r.n)}</span></span>${r.m?`<span class="badge">${esc(r.m)}</span>`:''}</div>`).join('');
+  box.style.display=RES.length?'block':'none';
+  let msg='';
+  if(dirState==='loading')msg='股票清單載入中…（英文代碼如 VOO 不需等待）';
+  else if(dirState==='fail')msg='股票清單載入失敗，仍可直接輸入完整代碼後按「加入」。<button type="button" class="secondary sm" data-act="dirRetry">重試</button>';
+  else if(q&&!RES.length)msg='找不到符合的標的，可直接輸入完整代碼（例如美股 VOO）後按「加入」。';
+  else if(!q)msg='輸入部分代碼或名稱（例如 005、元大、VOO）即可搜尋。';
+  st.innerHTML=msg;
+}
+function pickRes(i){
+  const r=RES[i];if(!r)return;
+  SEL=r;$('s_symbol').value=r.c;
+  $('s_results').style.display='none';$('s_status').innerHTML='';
+  const c=$('s_chosen');c.textContent='✔ 已選擇：'+r.c+(r.n?' '+r.n:'')+(r.m?'（'+r.m+'）':'');c.style.display='block';
+}
+function addSymbol(){
+  RES=[];SEL=null;$('s_symbol').value='';$('s_chosen').style.display='none';
+  openM('symModal');drawRes('');
+  if(dirState==='idle'||dirState==='fail')ensureDir();
+  setTimeout(()=>$('s_symbol').focus(),50);
+}
+function saveSymbol(e){
+  e.preventDefault();
+  const raw=curQuery();
+  let it=SEL&&SEL.c===raw?SEL:RES.find(r=>r.c===raw)||null;
+  if(!it&&RES.length>1)return alert('請從清單中點選要加入的標的');
+  if(!it&&RES.length===1)it=RES[0];
+  const s=it?it.c:raw;
+  if(!SYM_RE.test(s))return alert('代碼格式不正確，請輸入英數字，例如 0050、00720B、VOO');
+  closeM('symModal');
+  if(P.symbols[s]){alert(s+' 已經在清單中');openDetail(s);return}
+  P.symbols[s]=1;if(it&&it.n)P.names[s]=it.n;
+  save();render();fetchAll([s]);
 }
 
 function render(){
@@ -247,12 +373,13 @@ function render(){
     const empty=p.shares<=0&&!P.trades.some(t=>t.symbol===s);
     const el=document.createElement('div');el.className='card';el.dataset.act='detail';el.dataset.sym=s;
     el.innerHTML=`<div><div class="big">${esc(s)}<span class="badge">${q.currency}</span></div>
+      ${P.names[s]?`<div class="nm" style="margin-top:2px">${esc(P.names[s])}</div>`:''}
       <div class="sub" style="margin-top:4px">${empty?'尚未持股｜點此記錄買入或查看走勢':`持股 ${fmt(p.shares)} 股｜均價 ${cur}${avg.toFixed(2)}`}</div></div>
       <div class="r"><div class="big">$${Math.round(v).toLocaleString()}</div>
       <div class="sub" style="margin-top:4px">市價 ${q.price?cur+q.price:'未取得'}${showPL?` <span class="${pl>=0?'up':'dn'}">${sg(pl)} (${(c>0?pl/c*100:0).toFixed(1)}%)</span>`:''}</div></div>`;
     list.appendChild(el);
   });
-  if(!syms.length)list.innerHTML='<div class="sub" style="text-align:center;padding:20px">還沒有標的，請點上方「＋ 追蹤標的」輸入股票代碼。</div>';
+  if(!syms.length)list.innerHTML='<div class="sub" style="text-align:center;padding:20px">還沒有標的，請點上方「＋ 追蹤標的」搜尋並加入。</div>';
   P.divs.forEach(d=>{
     if(d.received!=null){if((d.payDate||d.exDate).slice(0,4)===yr)got+=d.received}
     else pend+=toTWD(d.perShare*pos(P,d.symbol,d.exDate).shares,quote(d.symbol).currency);
@@ -278,7 +405,7 @@ function render(){
 
 function openDetail(s){
   active=s;const q=quote(s),p=pos(P,s);
-  $('modalTitle').textContent=s+' 詳細紀錄';
+  $('modalTitle').textContent=label(s)+' 詳細紀錄';
   $('detailSum').textContent=`持股 ${fmt(p.shares)} 股｜已實現損益 ${sg(toTWD(p.real,q.currency))}`;
   $('tradeBody').innerHTML=P.trades.filter(t=>t.symbol===s).sort(cmp).reverse().map(t=>
     `<tr><td>${esc(t.date)}</td><td>${t.type==='BUY'?'買入':'賣出'}</td><td>${fmt(t.shares)}</td><td>${t.price}</td><td>${t.fee||'-'}</td>
@@ -307,24 +434,13 @@ async function renderChart(s){
 const openM=id=>{$(id).style.display='flex'};
 function closeM(id){if(id==='detailModal')chartToken++;$(id).style.display='none'}
 
-// 新增追蹤標的：只輸入代碼，確定後立刻出現卡片並抓價
-function addSymbol(){$('s_symbol').value='';openM('symModal');setTimeout(()=>$('s_symbol').focus(),50)}
-function saveSymbol(e){
-  e.preventDefault();
-  const s=$('s_symbol').value.trim().toUpperCase().replace(/\s+/g,'');
-  if(!SYM_RE.test(s))return alert('代碼格式不正確，請只輸入英數字，例如 0050、00720B、VOO');
-  closeM('symModal');
-  if(P.symbols[s]){alert(s+' 已經在清單中');openDetail(s);return}
-  P.symbols[s]=1;save();render();fetchAll([s]);
-}
-
 // 買賣／配息表單：標的由卡片帶入並鎖定，不能手動輸入或更換
 function openTradeForm(x){
   const t=typeof x==='number'?P.trades.find(v=>v.id===x):null;
   const sym=t?t.symbol:x;
   if(typeof sym!=='string'||!P.symbols[sym])return;
   $('tradeTitle').textContent=t?'編輯買賣紀錄':'新增買賣紀錄';
-  $('f_id').value=t?t.id:'';$('f_symbol').value=sym;$('f_symLabel').textContent='🔒 '+sym;
+  $('f_id').value=t?t.id:'';$('f_symbol').value=sym;$('f_symLabel').textContent='🔒 '+label(sym);
   $('f_type').value=t?t.type:'BUY';$('f_date').value=t?t.date:today();
   $('f_shares').value=t?t.shares:'';$('f_price').value=t?t.price:'';$('f_fee').value=t&&t.fee?t.fee:'';
   openM('tradeModal');
@@ -334,7 +450,7 @@ function openDivForm(x){
   const sym=d?d.symbol:x;
   if(typeof sym!=='string'||!P.symbols[sym])return;
   $('divTitle').textContent=d?'編輯配息紀錄':'新增配息紀錄';
-  $('d_id').value=d?d.id:'';$('d_symbol').value=sym;$('d_symLabel').textContent='🔒 '+sym;
+  $('d_id').value=d?d.id:'';$('d_symbol').value=sym;$('d_symLabel').textContent='🔒 '+label(sym);
   $('d_ex').value=d?d.exDate:'';$('d_pay').value=d?d.payDate:'';
   $('d_per').value=d&&d.perShare?d.perShare:'';$('d_recv').value=d&&d.received!=null?d.received:'';
   openM('divModal');
@@ -371,9 +487,9 @@ function delDiv(id){
   P.divs=P.divs.filter(v=>v.id!==id);save();openDetail(d.symbol);render();
 }
 function delSymbol(){
-  if(!confirm(`確定刪除 ${active} 的追蹤與所有買賣、配息紀錄嗎？`))return;
+  if(!confirm(`確定刪除 ${label(active)} 的追蹤與所有買賣、配息紀錄嗎？`))return;
   P.trades=P.trades.filter(t=>t.symbol!==active);P.divs=P.divs.filter(d=>d.symbol!==active);
-  delete P.symbols[active];delete P.prices[active];save();closeM('detailModal');render();
+  delete P.symbols[active];delete P.prices[active];delete P.names[active];save();closeM('detailModal');render();
 }
 // 從 Yahoo 帶入「你買入之後」已除息的配息 (每股金額請與公告核對)
 async function importDivs(s){
@@ -402,17 +518,24 @@ function handleFileSelect(ev){
     let n=null;try{n=normalize(JSON.parse(e.target.result))}catch(x){}
     if(!n||(!n.trades.length&&!n.divs.length&&!Object.keys(n.symbols).length)){alert('⚠️ 匯入失敗：檔案格式不正確，原有資料沒有被改動。');return}
     if(!confirm('匯入會覆蓋目前所有資料，確定繼續嗎？'))return;
-    P=n;save();render();fetchAll();alert('匯入備份成功！');
+    P=n;save();render();fillNames();fetchAll();alert('匯入備份成功！');
   };
   r.readAsText(f);ev.target.value='';
 }
 
 document.addEventListener('click',e=>{
   const el=e.target.closest('[data-act]');if(!el)return;
-  const id=+el.dataset.id,m={detail:()=>openDetail(el.dataset.sym),editTrade:()=>openTradeForm(id),delTrade:()=>delTrade(id),editDiv:()=>openDivForm(id),delDiv:()=>delDiv(id)};
+  const id=+el.dataset.id,m={
+    detail:()=>openDetail(el.dataset.sym),editTrade:()=>openTradeForm(id),delTrade:()=>delTrade(id),
+    editDiv:()=>openDivForm(id),delDiv:()=>delDiv(id),
+    pick:()=>pickRes(+el.dataset.i),dirRetry:()=>{dirState='loading';drawRes(curQuery());ensureDir(true)}};
   m[el.dataset.act]?.();
 });
-document.addEventListener('DOMContentLoaded',()=>{save();render();if(Object.keys(P.symbols).length)fetchAll()});
+document.addEventListener('DOMContentLoaded',()=>{
+  save();render();
+  if(Object.keys(P.symbols).length)fetchAll();
+  ensureDir(); // 背景載入股票清單 (有快取且未滿 7 天就不重抓)
+});
 </script>
 </body>
 </html>
